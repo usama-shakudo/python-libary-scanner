@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response, redirect
 from flask_cors import CORS
 import requests
 import logging
@@ -23,12 +23,17 @@ def home():
     return jsonify({
         "message": "Python Library Scanner API",
         "version": "1.0.0",
+        "pypi_server": PYPI_SERVER_URL,
         "endpoints": {
+            "/simple/": "Package index (for pip)",
+            "/simple/<package_name>/": "Package download links (for pip)",
+            "/packages/<path>": "Package file download (for pip)",
             "/api/package/<package_name>": "Get details about a specific package",
             "/api/package/<package_name>/versions": "Get all versions of a package",
             "/api/search?q=<query>": "Search for packages",
             "/health": "Health check endpoint"
-        }
+        },
+        "pip_usage": "pip install --index-url http://localhost:5000/simple/ <package_name>"
     })
 
 @app.route('/health')
@@ -129,6 +134,97 @@ def get_package_versions(package_name: str):
             "error": "Failed to fetch package versions",
             "details": str(e)
         }), 500
+
+@app.route('/simple/')
+def simple_index():
+    """
+    Simple Repository API - Package Index
+    Lists all available packages (for pip)
+    """
+    try:
+        logger.info(f"Requesting package index from: {PYPI_SERVER_URL}/simple/")
+        response = requests.get(f"{PYPI_SERVER_URL}/simple/", timeout=10)
+
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response headers: {dict(response.headers)}")
+
+        if response.status_code == 200:
+            # Return the HTML response as-is (Simple API format)
+            return Response(response.content, mimetype='text/html')
+        else:
+            logger.warning(f"Failed to fetch package index: {response.status_code}")
+            return Response("<html><body><h1>Package Index Unavailable</h1></body></html>",
+                          mimetype='text/html', status=response.status_code)
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch package index: {str(e)}")
+        return Response("<html><body><h1>Error fetching package index</h1></body></html>",
+                      mimetype='text/html', status=500)
+
+@app.route('/simple/<package_name>/')
+def simple_package(package_name: str):
+    """
+    Simple Repository API - Package Links
+    Returns download links for a specific package (for pip)
+    """
+    try:
+        url = f"{PYPI_SERVER_URL}/simple/{package_name}/"
+        logger.info(f"Requesting package links: {url}")
+        response = requests.get(url, timeout=10)
+
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response headers: {dict(response.headers)}")
+        logger.info(f"Response content preview: {response.text[:500]}")
+
+        if response.status_code == 404:
+            logger.warning(f"Package not found: {package_name}")
+            return Response(f"<html><body><h1>404 Not Found: {package_name}</h1></body></html>",
+                          mimetype='text/html', status=404)
+
+        response.raise_for_status()
+
+        # Return the HTML response as-is (Simple API format)
+        return Response(response.content, mimetype='text/html')
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch package links for {package_name}: {str(e)}")
+        return Response(f"<html><body><h1>Error: {str(e)}</h1></body></html>",
+                      mimetype='text/html', status=500)
+
+@app.route('/packages/<path:filename>')
+def download_package(filename: str):
+    """
+    Package file download endpoint
+    Proxies package file downloads from the PyPI server
+    """
+    try:
+        url = f"{PYPI_SERVER_URL}/packages/{filename}"
+        logger.info(f"Downloading package file: {url}")
+
+        response = requests.get(url, stream=True, timeout=30)
+
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response headers: {dict(response.headers)}")
+
+        if response.status_code == 404:
+            logger.warning(f"Package file not found: {filename}")
+            return Response("File not found", status=404)
+
+        response.raise_for_status()
+
+        # Stream the file back to the client
+        return Response(
+            response.iter_content(chunk_size=8192),
+            content_type=response.headers.get('content-type', 'application/octet-stream'),
+            headers={
+                'Content-Disposition': response.headers.get('content-disposition', ''),
+                'Content-Length': response.headers.get('content-length', '')
+            }
+        )
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to download package file {filename}: {str(e)}")
+        return Response(f"Error downloading file: {str(e)}", status=500)
 
 @app.route('/api/search')
 def search_packages():

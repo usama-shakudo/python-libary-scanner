@@ -31,14 +31,54 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Starting the Server
+
 Start the Flask server:
 ```bash
 python app.py
+# Or use the run script
+./run.sh
 ```
 
 The API will be available at `http://localhost:5000`
 
+### Installing Packages with pip
+
+Once the server is running, you can use it as a PyPI index with pip:
+
+```bash
+# Install a package from the proxy
+pip install --index-url http://localhost:5000/simple/ apache-libcloud
+
+# Install with extra index (fallback to public PyPI)
+pip install --extra-index-url http://localhost:5000/simple/ apache-libcloud
+
+# Install specific version
+pip install --index-url http://localhost:5000/simple/ apache-libcloud==3.7.0
+```
+
+The proxy server connects to: `https://pypiserver.umang-shakudo.canopyhub.io`
+
 ## API Endpoints
+
+### Simple Repository API (pip compatible)
+
+### Package Index
+- **GET** `/simple/`
+  - Returns HTML list of all available packages
+  - Used by pip to discover packages
+
+### Package Links
+- **GET** `/simple/<package_name>/`
+  - Returns HTML list of download links for a specific package
+  - Used by pip to find package files
+
+### Package Download
+- **GET** `/packages/<path:filename>`
+  - Downloads a specific package file
+  - Proxies the file from the PyPI server
+
+### JSON API Endpoints
 
 ### Root
 - **GET** `/`
