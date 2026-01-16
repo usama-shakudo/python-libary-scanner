@@ -170,8 +170,16 @@ def simple_package(package_name: str):
     Returns download links for a specific package (for pip)
     """
     try:
+        # Log all incoming request headers from pip
+        logger.info(f"=== Incoming Request from pip ===")
+        logger.info(f"Package: {package_name}")
+        logger.info(f"Request Headers: {dict(request.headers)}")
+        logger.info(f"Request Method: {request.method}")
+        logger.info(f"Request URL: {request.url}")
+        logger.info(f"Request Remote Address: {request.remote_addr}")
+
         url = f"{PYPI_SERVER_URL}/simple/{package_name}/"
-        logger.info(f"Requesting package links: {url}")
+        logger.info(f"Proxying to: {url}")
         response = requests.get(url, timeout=10)
 
         logger.info(f"Response status: {response.status_code}")
@@ -214,8 +222,15 @@ def download_package(filename: str):
     Proxies package file downloads from the PyPI server
     """
     try:
+        # Log all incoming request headers from pip
+        logger.info(f"=== Incoming Package Download Request ===")
+        logger.info(f"Filename: {filename}")
+        logger.info(f"Request Headers: {dict(request.headers)}")
+        logger.info(f"Request Method: {request.method}")
+        logger.info(f"Request Remote Address: {request.remote_addr}")
+
         url = f"{PYPI_SERVER_URL}/packages/{filename}"
-        logger.info(f"Downloading package file: {url}")
+        logger.info(f"Downloading from: {url}")
 
         response = requests.get(url, stream=True, timeout=30)
 
