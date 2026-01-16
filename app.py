@@ -203,7 +203,7 @@ def simple_package(package_name: str):
 </head>
 <body>
     <h1>Links for {package_name}</h1>
-    <a href="/packages/stub/{stub_filename}#sha256=0000000000000000000000000000000000000000000000000000000000000000">{stub_filename}</a><br>
+    <a href="/packages/stub/{stub_filename}">{stub_filename}</a><br>
 </body>
 </html>"""
 
