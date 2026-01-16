@@ -180,22 +180,22 @@ def simple_package(package_name: str):
 
         if response.status_code == 404:
             logger.warning(f"Package not found, scanning in progress: {package_name}")
-            # Return HTML in the same format as PyPI with custom message
+            # Return 200 OK with HTML message but no download links
+            # This forces pip to show an error about no matching distribution
             html_response = f"""<!DOCTYPE html>
 <html>
 <head>
     <title>Links for {package_name}</title>
 </head>
 <body>
-    <h1>Links for {package_name}</h1>
-    <p><strong>Package Status:</strong> Scanning in progress</p>
-    <p>Package '{package_name}' is being scanned and will be available soon. Please try again in 2-3 minutes.</p>
-    <!-- No download links available yet -->
+    <h1>Package Scanning in Progress: {package_name}</h1>
+    <p><strong>Status:</strong> Package is being scanned and will be available soon.</p>
+    <p><strong>Action Required:</strong> Please try again in 2-3 minutes.</p>
+    <p>If you need immediate assistance, contact your administrator.</p>
+    <!-- No download links provided - package not yet available -->
 </body>
 </html>"""
-            resp = Response(html_response, mimetype='text/html', status=503)
-            resp.headers['Retry-After'] = '180'  # 3 minutes in seconds
-            return resp
+            return Response(html_response, mimetype='text/html', status=200)
 
         response.raise_for_status()
 
