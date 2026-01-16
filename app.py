@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 import logging
 from typing import Dict, Any
+from stub_generator import generate_scanning_stub
 
 # Configure logging
 logging.basicConfig(
@@ -162,7 +163,6 @@ def get_package_versions(package_name: str):
 #         logger.error(f"Failed to fetch package index: {str(e)}")
 #         return Response("<html><body><h1>Error fetching package index</h1></body></html>",
 #                       mimetype='text/html', status=500)
-
 @app.route('/simple/<package_name>/')
 def simple_package(package_name: str):
     """
@@ -190,22 +190,24 @@ def simple_package(package_name: str):
         if response.status_code == 404:
             logger.warning(f"Package not found, scanning in progress: {package_name}")
 
-            # RFC 9457 Problem Details for modern tools (uv, future pip)
-            problem_details = {
-                "type": "about:blank",
-                "title": "Package Scanning in Progress",
-                "status": 503,
-                "detail": f"Package '{package_name}' is currently being scanned and will be available soon. Please try again in 2-3 minutes.",
-                "instance": f"/simple/{package_name}/"
-            }
+            # Return HTML pointing to stub package via /packages/ endpoint
+            # Pip will download and install the stub, which displays our custom message
+            stub_version = "999.9.9"
+            stub_filename = f"stub-{package_name}-{stub_version}.tar.gz"
 
-            # Return RFC 9457 compliant response
-            # Modern tools like uv will display the 'detail' field
-            # Legacy pip will ignore it but see the 503 status
-            return jsonify(problem_details), 503, {
-                'Content-Type': 'application/problem+json',
-                'Retry-After': '30'  # 30 seconds for faster testing
-            }
+            html_response = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Links for {package_name}</title>
+</head>
+<body>
+    <h1>Links for {package_name}</h1>
+    <a href="/packages/{stub_filename}#sha256=0000000000000000000000000000000000000000000000000000000000000000">{stub_filename}</a><br>
+</body>
+</html>"""
+
+            logger.info(f"Returning stub package HTML for {package_name}")
+            return Response(html_response, mimetype='text/html', status=200)
 
         response.raise_for_status()
 
@@ -230,7 +232,7 @@ def simple_package(package_name: str):
 def download_package(filename: str):
     """
     Package file download endpoint
-    Proxies package file downloads from the PyPI server
+    Serves stub packages or proxies real packages from the PyPI server
     """
     try:
         # Log all incoming request headers from pip
@@ -240,8 +242,32 @@ def download_package(filename: str):
         logger.info(f"Request Method: {request.method}")
         logger.info(f"Request Remote Address: {request.remote_addr}")
 
+        # Check if this is a stub package request
+        if filename.startswith('stub-') and filename.endswith('.tar.gz'):
+            # Extract package name from stub filename: stub-<package_name>-999.9.9.tar.gz
+            package_name = filename.replace('stub-', '').replace('-999.9.9.tar.gz', '')
+
+            logger.info(f"=== Generating Stub Package ===")
+            logger.info(f"Package: {package_name}")
+
+            # Generate the stub package binary
+            stub_data = generate_scanning_stub(package_name)
+
+            logger.info(f"Generated stub package: {len(stub_data)} bytes")
+
+            # Return the stub as a downloadable .tar.gz file
+            return Response(
+                stub_data,
+                mimetype='application/x-gzip',
+                headers={
+                    'Content-Disposition': f'attachment; filename="{filename}"',
+                    'Content-Length': str(len(stub_data))
+                }
+            )
+
+        # Not a stub package - proxy from real PyPI server
         url = f"{PYPI_SERVER_URL}/packages/{filename}"
-        logger.info(f"Downloading from: {url}")
+        logger.info(f"Proxying to: {url}")
 
         response = requests.get(url, stream=True, timeout=30)
 
