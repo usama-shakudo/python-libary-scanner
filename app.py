@@ -168,6 +168,7 @@ def simple_package(package_name: str):
     """
     Simple Repository API - Package Links
     Returns download links for a specific package (for pip)
+    Uses RFC 9457 Problem Details for error responses
     """
     try:
         # Log all incoming request headers from pip
@@ -188,22 +189,23 @@ def simple_package(package_name: str):
 
         if response.status_code == 404:
             logger.warning(f"Package not found, scanning in progress: {package_name}")
-            # Return 200 OK with HTML message but no download links
-            # This forces pip to show an error about no matching distribution
-            html_response = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>Links for {package_name}</title>
-</head>
-<body>
-    <h1>Package Scanning in Progress: {package_name}</h1>
-    <p><strong>Status:</strong> Package is being scanned and will be available soon.</p>
-    <p><strong>Action Required:</strong> Please try again in 2-3 minutes.</p>
-    <p>If you need immediate assistance, contact your administrator.</p>
-    <!-- No download links provided - package not yet available -->
-</body>
-</html>"""
-            return Response(html_response, mimetype='text/html', status=200)
+
+            # RFC 9457 Problem Details for modern tools (uv, future pip)
+            problem_details = {
+                "type": "about:blank",
+                "title": "Package Scanning in Progress",
+                "status": 503,
+                "detail": f"Package '{package_name}' is currently being scanned and will be available soon. Please try again in 2-3 minutes.",
+                "instance": f"/simple/{package_name}/"
+            }
+
+            # Return RFC 9457 compliant response
+            # Modern tools like uv will display the 'detail' field
+            # Legacy pip will ignore it but see the 503 status
+            return jsonify(problem_details), 503, {
+                'Content-Type': 'application/problem+json',
+                'Retry-After': '30'  # 30 seconds for faster testing
+            }
 
         response.raise_for_status()
 
@@ -212,8 +214,17 @@ def simple_package(package_name: str):
 
     except requests.RequestException as e:
         logger.error(f"Failed to fetch package links for {package_name}: {str(e)}")
-        return Response(f"<html><body><h1>Error: {str(e)}</h1></body></html>",
-                      mimetype='text/html', status=500)
+
+        # RFC 9457 error response
+        problem_details = {
+            "type": "about:blank",
+            "title": "Package Fetch Error",
+            "status": 500,
+            "detail": f"Failed to fetch package information: {str(e)}",
+            "instance": f"/simple/{package_name}/"
+        }
+
+        return jsonify(problem_details), 500, {'Content-Type': 'application/problem+json'}
 
 @app.route('/packages/<path:filename>')
 def download_package(filename: str):
