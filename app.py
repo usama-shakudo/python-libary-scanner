@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Custom PyPI Server URL
-PYPI_SERVER_URL = "https://pypiserver.umang-shakudo.canopyhub.io"
+# Custom PyPI Server URL (using internal Kubernetes service)
+# Internal service format: <service-name>.<namespace>.svc.cluster.local:<port>
+PYPI_SERVER_URL = "http://pypiserver.hyperplane-pypiserver.svc.cluster.local:8080"
 
 @app.route('/')
 def home():
@@ -135,31 +136,32 @@ def get_package_versions(package_name: str):
             "details": str(e)
         }), 500
 
-@app.route('/simple/')
-def simple_index():
-    """
-    Simple Repository API - Package Index
-    Lists all available packages (for pip)
-    """
-    try:
-        logger.info(f"Requesting package index from: {PYPI_SERVER_URL}/simple/")
-        response = requests.get(f"{PYPI_SERVER_URL}/simple/", timeout=10)
-
-        logger.info(f"Response status: {response.status_code}")
-        logger.info(f"Response headers: {dict(response.headers)}")
-
-        if response.status_code == 200:
-            # Return the HTML response as-is (Simple API format)
-            return Response(response.content, mimetype='text/html')
-        else:
-            logger.warning(f"Failed to fetch package index: {response.status_code}")
-            return Response("<html><body><h1>Package Index Unavailable</h1></body></html>",
-                          mimetype='text/html', status=response.status_code)
-
-    except requests.RequestException as e:
-        logger.error(f"Failed to fetch package index: {str(e)}")
-        return Response("<html><body><h1>Error fetching package index</h1></body></html>",
-                      mimetype='text/html', status=500)
+# @app.route('/simple/')
+# def simple_index():
+#     """
+#     Simple Repository API - Package Index
+#     Lists all available packages (for pip)
+#     Note: This endpoint is optional - pip doesn't need it for installing specific packages
+#     """
+#     try:
+#         logger.info(f"Requesting package index from: {PYPI_SERVER_URL}/simple/")
+#         response = requests.get(f"{PYPI_SERVER_URL}/simple/", timeout=10)
+#
+#         logger.info(f"Response status: {response.status_code}")
+#         logger.info(f"Response headers: {dict(response.headers)}")
+#
+#         if response.status_code == 200:
+#             # Return the HTML response as-is (Simple API format)
+#             return Response(response.content, mimetype='text/html')
+#         else:
+#             logger.warning(f"Failed to fetch package index: {response.status_code}")
+#             return Response("<html><body><h1>Package Index Unavailable</h1></body></html>",
+#                           mimetype='text/html', status=response.status_code)
+#
+#     except requests.RequestException as e:
+#         logger.error(f"Failed to fetch package index: {str(e)}")
+#         return Response("<html><body><h1>Error fetching package index</h1></body></html>",
+#                       mimetype='text/html', status=500)
 
 @app.route('/simple/<package_name>/')
 def simple_package(package_name: str):
