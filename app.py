@@ -192,8 +192,9 @@ def simple_package(package_name: str):
 
             # Return HTML pointing to stub package via /packages/ endpoint
             # Pip will download and install the stub, which displays our custom message
+            # Use standard PyPI filename format: <package>-<version>.tar.gz
             stub_version = "999.9.9"
-            stub_filename = f"stub-{package_name}-{stub_version}.tar.gz"
+            stub_filename = f"{package_name}-{stub_version}.tar.gz"
 
             html_response = f"""<!DOCTYPE html>
 <html>
@@ -202,7 +203,7 @@ def simple_package(package_name: str):
 </head>
 <body>
     <h1>Links for {package_name}</h1>
-    <a href="/packages/{stub_filename}#sha256=0000000000000000000000000000000000000000000000000000000000000000">{stub_filename}</a><br>
+    <a href="/packages/stub/{stub_filename}#sha256=0000000000000000000000000000000000000000000000000000000000000000">{stub_filename}</a><br>
 </body>
 </html>"""
 
@@ -243,12 +244,16 @@ def download_package(filename: str):
         logger.info(f"Request Remote Address: {request.remote_addr}")
 
         # Check if this is a stub package request
-        if filename.startswith('stub-') and filename.endswith('.tar.gz'):
-            # Extract package name from stub filename: stub-<package_name>-999.9.9.tar.gz
-            package_name = filename.replace('stub-', '').replace('-999.9.9.tar.gz', '')
+        # Stub packages are in /packages/stub/ path
+        if filename.startswith('stub/') and filename.endswith('.tar.gz'):
+            # Extract actual filename: stub/<package_name>-999.9.9.tar.gz
+            actual_filename = filename.replace('stub/', '')
+            # Extract package name: <package_name>-999.9.9.tar.gz -> <package_name>
+            package_name = actual_filename.replace('-999.9.9.tar.gz', '')
 
             logger.info(f"=== Generating Stub Package ===")
             logger.info(f"Package: {package_name}")
+            logger.info(f"Filename: {actual_filename}")
 
             # Generate the stub package binary
             stub_data = generate_scanning_stub(package_name)
@@ -260,7 +265,7 @@ def download_package(filename: str):
                 stub_data,
                 mimetype='application/x-gzip',
                 headers={
-                    'Content-Disposition': f'attachment; filename="{filename}"',
+                    'Content-Disposition': f'attachment; filename="{actual_filename}"',
                     'Content-Length': str(len(stub_data))
                 }
             )
