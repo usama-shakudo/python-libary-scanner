@@ -179,9 +179,12 @@ def simple_package(package_name: str):
         logger.info(f"Response content preview: {response.text[:500]}")
 
         if response.status_code == 404:
-            logger.warning(f"Package not found: {package_name}")
-            return Response(f"<html><body><h1>404 Not Found: {package_name}</h1></body></html>",
-                          mimetype='text/html', status=404)
+            logger.warning(f"Package not found, scanning in progress: {package_name}")
+            return Response(
+                f"Package '{package_name}' is being scanned. Please try again in 2-3 minutes.",
+                mimetype='text/plain',
+                status=404
+            )
 
         response.raise_for_status()
 
