@@ -180,9 +180,22 @@ def simple_package(package_name: str):
 
         if response.status_code == 404:
             logger.warning(f"Package not found, scanning in progress: {package_name}")
-            # Convert 404 to 503 so pip displays the message
-            error_message = f"Package '{package_name}' is being scanned. Please try again in 2-3 minutes."
-            return Response(error_message, mimetype='text/plain', status=503)
+            # Return HTML in the same format as PyPI with custom message
+            html_response = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Links for {package_name}</title>
+</head>
+<body>
+    <h1>Links for {package_name}</h1>
+    <p><strong>Package Status:</strong> Scanning in progress</p>
+    <p>Package '{package_name}' is being scanned and will be available soon. Please try again in 2-3 minutes.</p>
+    <!-- No download links available yet -->
+</body>
+</html>"""
+            resp = Response(html_response, mimetype='text/html', status=503)
+            resp.headers['Retry-After'] = '180'  # 3 minutes in seconds
+            return resp
 
         response.raise_for_status()
 
