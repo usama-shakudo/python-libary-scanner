@@ -180,11 +180,9 @@ def simple_package(package_name: str):
 
         if response.status_code == 404:
             logger.warning(f"Package not found, scanning in progress: {package_name}")
-            return Response(
-                f"Package '{package_name}' is being scanned. Please try again in 2-3 minutes.",
-                mimetype='text/plain',
-                status=404
-            )
+            # Convert 404 to 503 so pip displays the message
+            error_message = f"Package '{package_name}' is being scanned. Please try again in 2-3 minutes."
+            return Response(error_message, mimetype='text/plain', status=503)
 
         response.raise_for_status()
 
