@@ -16,11 +16,11 @@ FLASK_PORT = int(os.getenv('FLASK_PORT', 5000))
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 
 # Database Configuration (PostgreSQL/Supabase)
-DB_HOST = os.getenv('DB_HOST', 'supabase-postgresql.hyperplane-supabase.svc.cluster.local')
-DB_PORT = int(os.getenv('DB_PORT', 5432))
-DB_NAME = os.getenv('DB_NAME', 'postgres')
-DB_USER = os.getenv('DB_USER', 'supabase_admin')
-DB_PASSWORD = os.getenv('DB_PASSWORD', '')  # Set via environment variable for security
+# Use connection string format: postgresql://user:password@host:port/database
+DATABASE_URL = os.getenv(
+    'DATABASE_URL',
+    'postgresql://supabase_admin:@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
+)
 
 # Logging Configuration
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

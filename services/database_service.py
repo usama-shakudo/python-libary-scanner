@@ -17,26 +17,17 @@ class DatabaseService:
     Service for interacting with PostgreSQL to manage package vulnerability data
     """
 
-    def __init__(self, host: str, port: int, database: str, user: str, password: str):
+    def __init__(self, connection_string: str):
         """
-        Initialize database connection parameters
+        Initialize database connection using connection string
 
         Args:
-            host: Database host
-            port: Database port
-            database: Database name
-            user: Database user
-            password: Database password
+            connection_string: PostgreSQL connection string
+                              (e.g., postgresql://user:password@host:port/database)
         """
-        self.connection_params = {
-            'host': host,
-            'port': port,
-            'database': database,
-            'user': user,
-            'password': password
-        }
+        self.connection_string = connection_string
         self.table_name = 'packages'
-        logger.info(f"Database service initialized for {host}:{port}/{database}")
+        logger.info(f"Database service initialized with connection string")
 
     @contextmanager
     def get_connection(self):
@@ -48,7 +39,7 @@ class DatabaseService:
         """
         conn = None
         try:
-            conn = psycopg2.connect(**self.connection_params)
+            conn = psycopg2.connect(self.connection_string)
             yield conn
             conn.commit()
         except Exception as e:
@@ -178,22 +169,19 @@ class DatabaseService:
 _db_service: Optional[DatabaseService] = None
 
 
-def init_database_service(host: str, port: int, database: str, user: str, password: str) -> DatabaseService:
+def init_database_service(connection_string: str) -> DatabaseService:
     """
     Initialize the database service singleton
 
     Args:
-        host: Database host
-        port: Database port
-        database: Database name
-        user: Database user
-        password: Database password
+        connection_string: PostgreSQL connection string
+                          (e.g., postgresql://user:password@host:port/database)
 
     Returns:
         DatabaseService instance
     """
     global _db_service
-    _db_service = DatabaseService(host, port, database, user, password)
+    _db_service = DatabaseService(connection_string)
 
     # Create table if it doesn't exist
     _db_service.create_table_if_not_exists()
