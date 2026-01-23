@@ -93,7 +93,7 @@ def simple_package(package_name: str):
 
                     return jsonify(problem_details), 503, {
                         'Content-Type': 'application/problem+json',
-                        'Retry-After': '180'  # 3 minutes
+                        'Retry-After': '50'  # 3 minutes
                     }
             else:
                 # Database not available - return generic scanning message

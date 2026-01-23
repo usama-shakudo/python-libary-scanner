@@ -17,6 +17,7 @@ FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 
 # Database Configuration (PostgreSQL/Supabase)
 # Use connection string format: postgresql://user:password@host:port/database
+# IMPORTANT: Set DATABASE_URL environment variable with actual password
 DATABASE_URL = os.getenv(
     'DATABASE_URL',
     'postgresql://supabase_admin:@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
