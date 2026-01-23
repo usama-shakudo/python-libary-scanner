@@ -8,6 +8,7 @@ import requests
 import logging
 
 from config import PYPI_SERVER_URL
+from services import get_database_service
 
 simple_api_bp = Blueprint('simple_api', __name__, url_prefix='/simple')
 logger = logging.getLogger(__name__)
@@ -37,24 +38,78 @@ def simple_package(package_name: str):
         logger.info(f"Response content preview: {response.text[:500]}")
 
         if response.status_code == 404:
-            logger.warning(f"Package not found, scanning in progress: {package_name}")
+            logger.warning(f"Package not found in PyPI: {package_name}")
 
-            # RFC 9457 Problem Details for modern tools (uv, future pip)
-            problem_details = {
-                "type": "about:blank",
-                "title": "Package Scanning in Progress",
-                "status": 503,
-                "detail": f"Package '{package_name}' is currently being scanned and will be available soon. Please try again in 2-3 minutes.",
-                "instance": f"/simple/{package_name}/"
-            }
+            # Check database for vulnerability status
+            db_service = get_database_service()
+            if db_service:
+                package_data = db_service.get_package_status(package_name)
 
-            # Return RFC 9457 compliant response
-            # Modern tools like uv will display the 'detail' field
-            # Legacy pip will see the 503 status and retry
-            return jsonify(problem_details), 503, {
-                'Content-Type': 'application/problem+json',
-                'Retry-After': '180'  # 3 minutes
-            }
+                if package_data:
+                    # Package exists in database
+                    if db_service.is_package_vulnerable(package_data):
+                        # Package is vulnerable - block installation
+                        logger.error(f"Package is vulnerable: {package_name}")
+                        vuln_info = db_service.get_vulnerability_info(package_data)
+
+                        problem_details = {
+                            "type": "about:blank",
+                            "title": "Security Policy Violation",
+                            "status": 403,
+                            "detail": f"Package '{package_name}' is blocked due to security vulnerabilities. {vuln_info}",
+                            "instance": f"/simple/{package_name}/"
+                        }
+
+                        return jsonify(problem_details), 403, {
+                            'Content-Type': 'application/problem+json'
+                        }
+                    else:
+                        # Package is pending/scanning
+                        logger.info(f"Package is being scanned: {package_name}")
+                        problem_details = {
+                            "type": "about:blank",
+                            "title": "Package Scanning in Progress",
+                            "status": 503,
+                            "detail": f"Package '{package_name}' is currently being scanned and will be available soon. Please try again in 2-3 minutes.",
+                            "instance": f"/simple/{package_name}/"
+                        }
+
+                        return jsonify(problem_details), 503, {
+                            'Content-Type': 'application/problem+json',
+                            'Retry-After': '180'  # 3 minutes
+                        }
+                else:
+                    # Package not in database - add as pending
+                    logger.info(f"Package not in database, adding as pending: {package_name}")
+                    db_service.add_package_pending(package_name)
+
+                    problem_details = {
+                        "type": "about:blank",
+                        "title": "Package Scanning Initiated",
+                        "status": 503,
+                        "detail": f"Package '{package_name}' has been queued for security scanning. Please try again in 2-3 minutes.",
+                        "instance": f"/simple/{package_name}/"
+                    }
+
+                    return jsonify(problem_details), 503, {
+                        'Content-Type': 'application/problem+json',
+                        'Retry-After': '180'  # 3 minutes
+                    }
+            else:
+                # Database not available - return generic scanning message
+                logger.warning("Database service not available")
+                problem_details = {
+                    "type": "about:blank",
+                    "title": "Package Scanning in Progress",
+                    "status": 503,
+                    "detail": f"Package '{package_name}' is currently being scanned. Please try again in 2-3 minutes.",
+                    "instance": f"/simple/{package_name}/"
+                }
+
+                return jsonify(problem_details), 503, {
+                    'Content-Type': 'application/problem+json',
+                    'Retry-After': '180'  # 3 minutes
+                }
 
         response.raise_for_status()
 

@@ -7,8 +7,12 @@ from flask import Flask
 from flask_cors import CORS
 import logging
 
-from config import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, LOG_LEVEL, LOG_FORMAT, PYPI_SERVER_URL
+from config import (
+    FLASK_HOST, FLASK_PORT, FLASK_DEBUG, LOG_LEVEL, LOG_FORMAT, PYPI_SERVER_URL,
+    DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+)
 from routes import health_bp, simple_api_bp, packages_bp, api_bp
+from services import init_database_service
 
 # Configure logging
 logging.basicConfig(
@@ -24,6 +28,16 @@ app = Flask(__name__)
 
 # Enable CORS
 CORS(app)
+
+# Initialize database service
+try:
+    if DB_PASSWORD:
+        init_database_service(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD)
+        logger.info("Database service initialized successfully")
+    else:
+        logger.warning("Database password not provided - database features will be disabled")
+except Exception as e:
+    logger.error(f"Failed to initialize database service: {str(e)}")
 
 # Register blueprints
 app.register_blueprint(health_bp)
