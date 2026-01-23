@@ -125,3 +125,53 @@ def search_packages():
         "results": [],
         "message": "Search functionality not fully implemented yet"
     }), 200
+
+
+@api_bp.route('/db/packages')
+def list_db_packages():
+    """
+    List all packages in database (for debugging)
+    """
+    from services import get_database_service
+    from psycopg2.extras import RealDictCursor
+
+    db_service = get_database_service()
+    if not db_service:
+        return jsonify({
+            "error": "Database not available",
+            "message": "Database service not initialized"
+        }), 503
+
+    try:
+        with db_service.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute("""
+                    SELECT package_name, status, vulnerability_info,
+                           created_at, updated_at
+                    FROM packages
+                    ORDER BY created_at DESC
+                """)
+                packages = cursor.fetchall()
+
+                # Convert to JSON-serializable format
+                result = []
+                for pkg in packages:
+                    result.append({
+                        "package_name": pkg['package_name'],
+                        "status": pkg['status'],
+                        "vulnerability_info": pkg['vulnerability_info'],
+                        "created_at": pkg['created_at'].isoformat() if pkg['created_at'] else None,
+                        "updated_at": pkg['updated_at'].isoformat() if pkg['updated_at'] else None
+                    })
+
+                return jsonify({
+                    "total": len(result),
+                    "packages": result
+                }), 200
+
+    except Exception as e:
+        logger.error(f"Error fetching packages from DB: {str(e)}")
+        return jsonify({
+            "error": "Database query failed",
+            "details": str(e)
+        }), 500
