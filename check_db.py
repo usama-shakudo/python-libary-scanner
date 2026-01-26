@@ -15,7 +15,7 @@ except ImportError:
 # Get DATABASE_URL from environment or use default
 DATABASE_URL = os.getenv(
     'DATABASE_URL',
-    'postgresql://supabase_admin:CYo8ILCGUi%@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
+    'postgresql://supabase_admin:CYo8ILCGUi%25@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
 )
 
 print("=" * 60)

@@ -28,7 +28,7 @@ app = Flask(__name__)
 
 # Enable CORS
 CORS(app)
-DATABASE_URL = 'postgresql://supabase_admin:CYo8ILCGUi%@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
+DATABASE_URL = 'postgresql://supabase_admin:CYo8ILCGUi%25@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
 # Initialize database service
 try:
     init_database_service(DATABASE_URL)
