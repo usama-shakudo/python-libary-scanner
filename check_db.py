@@ -2,7 +2,6 @@
 Quick script to check database connection and view packages table
 Run with: python3 check_db.py
 """
-import os
 
 try:
     import psycopg2
@@ -12,11 +11,8 @@ except ImportError:
     print("Install with: pip3 install psycopg2-binary")
     exit(1)
 
-# Get DATABASE_URL from environment or use default
-DATABASE_URL = os.getenv(
-    'DATABASE_URL',
-    'postgresql://postgres:CYo8ILCGUi@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
-)
+# Hardcoded Supabase DATABASE_URL (bypasses ConfigMap environment variable)
+DATABASE_URL = 'postgresql://postgres:CYo8ILCGUi@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
 
 print("=" * 60)
 print("DATABASE CONNECTION TEST")
