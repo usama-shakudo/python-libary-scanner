@@ -28,15 +28,11 @@ app = Flask(__name__)
 
 # Enable CORS
 CORS(app)
-
+DATABASE_URL = 'postgresql://supabase_admin:CYo8ILCGUi%@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
 # Initialize database service
 try:
-    if DATABASE_URL and '://supabase_admin:@' not in DATABASE_URL:
-        # Only initialize if password is provided in connection string
-        init_database_service(DATABASE_URL)
-        logger.info("Database service initialized successfully")
-    else:
-        logger.warning("Database connection string not properly configured - database features will be disabled")
+    init_database_service(DATABASE_URL)
+    logger.info("Database service initialized with Supabase URL (overriding ConfigMap)")
 except Exception as e:
     logger.error(f"Failed to initialize database service: {str(e)}")
 
