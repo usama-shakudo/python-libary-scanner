@@ -46,7 +46,7 @@ def get_running_jobs_count():
         with open(K8S_TOKEN_PATH, 'r') as f:
             token = f.read().strip()
 
-        # Make request to Kubernetes API
+        # Make request to Kubernetes API with retry logic for Istio initialization
         url = f"{K8S_API_HOST}/apis/batch/v1/namespaces/{NAMESPACE}/jobs"
         params = {"labelSelector": f"app={JOB_NAME_PREFIX}"}
         headers = {"Authorization": f"Bearer {token}"}
@@ -54,8 +54,26 @@ def get_running_jobs_count():
         # Check if CA cert exists
         verify = K8S_CA_CERT_PATH if os.path.exists(K8S_CA_CERT_PATH) else False
 
-        response = requests.get(url, headers=headers, params=params, verify=verify, timeout=10)
-        response.raise_for_status()
+        # Retry logic for Istio sidecar initialization
+        import time
+        max_retries = 3
+        retry_delay = 2  # seconds
+
+        response = None
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, headers=headers, params=params, verify=verify, timeout=10)
+                response.raise_for_status()
+                break
+            except requests.exceptions.ConnectionError as e:
+                if attempt < max_retries - 1:
+                    print(f"Connection attempt {attempt + 1} failed, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    raise
+
+        if not response:
+            raise Exception("Failed to connect to Kubernetes API after retries")
 
         jobs_data = response.json()
 
@@ -76,6 +94,7 @@ def get_running_jobs_count():
 
     except Exception as e:
         print(f"Error checking jobs: {str(e)}")
+        print(f"Defaulting to 0 running jobs")
         import traceback
         traceback.print_exc()
         return 0
@@ -84,7 +103,7 @@ def get_running_jobs_count():
 def get_pending_packages(limit):
     """Fetch pending packages from database"""
     try:
-        print(f"Step 1: Fetching pending packages from database...")
+        print(f"Step 2: Fetching pending packages from database...")
 
         # Add connection timeout and retry for Istio sidecar initialization
         print(f"Waiting for Istio sidecar to initialize...")
@@ -163,12 +182,8 @@ def create_scanner_job(package_name):
 def main():
     """Main execution function"""
 
-    # 1. Skip job counting for now (Istio networking issue in scheduled jobs)
-    #    TODO: Re-enable once Istio ServiceEntry is configured
-    running_jobs = 0  # get_running_jobs_count()
-    print(f"Note: Job counting disabled due to Istio networking restrictions")
-    print(f"Proceeding to fetch pending packages...")
-    print()
+    # 1. Check running jobs (with Istio retry logic)
+    running_jobs = get_running_jobs_count()
 
     # 2. Calculate available slots
     available_slots = MAX_CONCURRENT_JOBS - running_jobs
