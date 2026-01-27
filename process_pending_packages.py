@@ -48,7 +48,7 @@ def get_running_jobs_count():
 
         # Make request to Kubernetes API with retry logic for Istio initialization
         url = f"{K8S_API_HOST}/apis/batch/v1/namespaces/{NAMESPACE}/jobs"
-        params = {"labelSelector": f"app={JOB_NAME_PREFIX}"}
+        params = {"labelSelector": f"hyperplane.dev/app-name={JOB_NAME_PREFIX}"}
         headers = {"Authorization": f"Bearer {token}"}
 
         # Check if CA cert exists
