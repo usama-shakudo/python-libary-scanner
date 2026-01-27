@@ -17,14 +17,13 @@ NAMESPACE = "hyperplane-pipelines"
 DATABASE_URL = "postgresql://postgres:CYo8ILCGUi@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres"
 
 # Kubernetes API configuration (in-cluster)
-# Use environment variables that Kubernetes automatically provides
-K8S_HOST = os.getenv('KUBERNETES_SERVICE_HOST', 'kubernetes.default.svc')
-K8S_PORT = os.getenv('KUBERNETES_SERVICE_PORT_HTTPS', '443')
-K8S_API_HOST = f"https://{K8S_HOST}:{K8S_PORT}"
+# Access API server directly via hyperplane-core namespace
+K8S_API_HOST = "https://kubernetes.hyperplane-core.svc.cluster.local:443"
 K8S_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 K8S_CA_CERT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
 print(f"Kubernetes API Host: {K8S_API_HOST}")
+print(f"Database URL: {DATABASE_URL.split('@')[0].split(':')[0]}:***@{DATABASE_URL.split('@')[1]}")
 print()
 
 print("=" * 60)
