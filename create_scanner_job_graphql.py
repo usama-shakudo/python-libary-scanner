@@ -8,63 +8,64 @@ import json
 import requests
 from datetime import datetime
 
-# Keycloak Authentication Configuration
-REALM = os.getenv("HYPERPLANE_REALM", "Hyperplane")
-CLIENT_ID = os.getenv("HYPERPLANE_CLIENT_ID", "istio")
-HYPERPLANE_DOMAIN = os.getenv("HYPERPLANE_DOMAIN", "")  # Required: your-domain.com
-USERNAME = os.getenv("HYPERPLANE_USERNAME", "")  # Required
-PASSWORD = os.getenv("HYPERPLANE_PASSWORD", "")  # Required
-REFRESH_TOKEN = os.getenv("HYPERPLANE_REFRESH_TOKEN", None)
+# Keycloak Authentication Configuration (DISABLED - Running without auth)
+# REALM = os.getenv("HYPERPLANE_REALM", "Hyperplane")
+# CLIENT_ID = os.getenv("HYPERPLANE_CLIENT_ID", "istio")
+# HYPERPLANE_DOMAIN = os.getenv("HYPERPLANE_DOMAIN", "")  # Required: your-domain.com
+# USERNAME = os.getenv("HYPERPLANE_USERNAME", "")  # Required
+# PASSWORD = os.getenv("HYPERPLANE_PASSWORD", "")  # Required
+# REFRESH_TOKEN = os.getenv("HYPERPLANE_REFRESH_TOKEN", None)
 
 # Hyperplane GraphQL Configuration
-HYPERPLANE_GRAPHQL_URL = os.getenv("HYPERPLANE_GRAPHQL_URL", "http://hyperplane-core.hyperplane-core.svc.cluster.local/graphql")
-HYPERPLANE_USER_ID = os.getenv("HYPERPLANE_USER_ID", "")
-HYPERPLANE_USER_EMAIL = os.getenv("HYPERPLANE_USER_EMAIL", "")
-HYPERPLANE_VC_SERVER_ID = os.getenv("HYPERPLANE_VC_SERVER_ID", "")
+HYPERPLANE_GRAPHQL_URL = os.getenv("HYPERPLANE_GRAPHQL_URL", "http://api-server.hyperplane-core.svc.cluster.local/graphql")
+HYPERPLANE_USER_ID = os.getenv("HYPERPLANE_USER_ID", "0e71f618-bff9-49a7-a77e-81d201503fe1")
+HYPERPLANE_USER_EMAIL = os.getenv("HYPERPLANE_USER_EMAIL", "shakudo-admin@shakudo.io")
+HYPERPLANE_VC_SERVER_ID = os.getenv("HYPERPLANE_VC_SERVER_ID", "654cabbc-0b09-416b-8efa-b880a5a343571")
 
 # Scanner Configuration
 SCANNER_IMAGE = os.getenv("SCANNER_IMAGE", "gcr.io/devsentient-infra/custom/hnb/custom/pypiscanningjob:latest")
 DATABASE_URL = "postgresql://postgres:CYo8ILCGUi@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres"
 
 
-def get_shakudo_token():
-    """
-    Generate JWT token via Keycloak/OpenID Connect
-    If refresh token is provided, use it to obtain a new access token
-    """
-    if not HYPERPLANE_DOMAIN:
-        raise ValueError("HYPERPLANE_DOMAIN environment variable is required")
-
-    if not USERNAME and not REFRESH_TOKEN:
-        raise ValueError("Either HYPERPLANE_USERNAME/PASSWORD or HYPERPLANE_REFRESH_TOKEN is required")
-
-    token_endpoint = f"https://{HYPERPLANE_DOMAIN}/auth/realms/{REALM}/protocol/openid-connect/token"
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-    if REFRESH_TOKEN:
-        data = {
-            "grant_type": "refresh_token",
-            "refresh_token": REFRESH_TOKEN,
-            "client_id": CLIENT_ID
-        }
-    else:
-        data = {
-            "grant_type": "password",
-            "username": USERNAME,
-            "password": PASSWORD,
-            "client_id": CLIENT_ID
-        }
-
-    try:
-        response = requests.post(token_endpoint, data=data, headers=headers, timeout=10)
-        response.raise_for_status()
-        res = response.json()
-        access_token = res['access_token']
-        new_refresh_token = res.get('refresh_token', REFRESH_TOKEN)
-        return access_token, new_refresh_token
-    except requests.exceptions.RequestException as err:
-        print(f"Failed to get token: {err}")
-        return None, None
+# Authentication disabled - running without Keycloak token
+# def get_shakudo_token():
+#     """
+#     Generate JWT token via Keycloak/OpenID Connect
+#     If refresh token is provided, use it to obtain a new access token
+#     """
+#     if not HYPERPLANE_DOMAIN:
+#         raise ValueError("HYPERPLANE_DOMAIN environment variable is required")
+#
+#     if not USERNAME and not REFRESH_TOKEN:
+#         raise ValueError("Either HYPERPLANE_USERNAME/PASSWORD or HYPERPLANE_REFRESH_TOKEN is required")
+#
+#     token_endpoint = f"https://{HYPERPLANE_DOMAIN}/auth/realms/{REALM}/protocol/openid-connect/token"
+#     headers = {"Content-Type": "application/x-www-form-urlencoded"}
+#
+#     if REFRESH_TOKEN:
+#         data = {
+#             "grant_type": "refresh_token",
+#             "refresh_token": REFRESH_TOKEN,
+#             "client_id": CLIENT_ID
+#         }
+#     else:
+#         data = {
+#             "grant_type": "password",
+#             "username": USERNAME,
+#             "password": PASSWORD,
+#             "client_id": CLIENT_ID
+#         }
+#
+#     try:
+#         response = requests.post(token_endpoint, data=data, headers=headers, timeout=10)
+#         response.raise_for_status()
+#         res = response.json()
+#         access_token = res['access_token']
+#         new_refresh_token = res.get('refresh_token', REFRESH_TOKEN)
+#         return access_token, new_refresh_token
+#     except requests.exceptions.RequestException as err:
+#         print(f"Failed to get token: {err}")
+#         return None, None
 
 
 def create_scanner_job_graphql(package_name):
@@ -79,9 +80,9 @@ def create_scanner_job_graphql(package_name):
     pod_spec = {
         "priorityClassName": "shakudo-job-default",
         "restartPolicy": "Never",
-        "serviceAccountName": "gcr-pipelines",
+        "serviceAccountName": "package-scanner-scan",
         "nodeSelector": {
-            "hyperplane.dev/nodeType": "default-jobs-pool"
+           
         },
         "tolerations": [{
             "effect": "NoSchedule",
@@ -212,20 +213,13 @@ def create_scanner_job_graphql(package_name):
         "pipelineType": "BASH"
     }
 
-    # Get access token via Keycloak
+    # Running without authentication (in-cluster access)
     print(f"Creating scanner job via GraphQL: {job_name}")
     print(f"  Package: {package_name}")
-    print(f"  Getting authentication token...")
 
-    access_token, _ = get_shakudo_token()
-    if not access_token:
-        print(f"  ✗ Failed to obtain access token")
-        return False
-
-    # Make the GraphQL request
+    # Make the GraphQL request (no authentication required for in-cluster)
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {access_token}"
+        "Content-Type": "application/json"
     }
 
     payload = {

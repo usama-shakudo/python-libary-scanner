@@ -35,7 +35,7 @@ class Config:
     # Hyperplane API
     HYPERPLANE_GRAPHQL_URL = os.getenv(
         'HYPERPLANE_GRAPHQL_URL',
-        'http://hyperplane-core.hyperplane-core.svc.cluster.local/graphql'
+        'http://api-server.hyperplane-core.svc.cluster.local/graphql'
     )
     HYPERPLANE_DOMAIN = os.getenv('HYPERPLANE_DOMAIN')
     HYPERPLANE_REALM = os.getenv('HYPERPLANE_REALM', 'Hyperplane')
