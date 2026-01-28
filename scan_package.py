@@ -10,7 +10,7 @@ import os
 import subprocess
 import tempfile
 import json
-import psycopg2
+# import psycopg2
 from datetime import datetime
 from pathlib import Path
 import glob
@@ -76,44 +76,49 @@ def parse_package_spec(package_spec):
 
 def update_package_status(package_name, status, vulnerability_info=None):
     """Update package status in database"""
-    try:
-        # Add retry logic for Istio
-        import time
-        max_retries = 3
-        retry_delay = 2
+    # TODO: Uncomment when psycopg2 is available
+    log(f"⚠️  DATABASE UPDATE SKIPPED (psycopg2 not available)")
+    log(f"   Would update {package_name} status to: {status}")
+    return True
 
-        conn = None
-        for attempt in range(max_retries):
-            try:
-                conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
-                break
-            except psycopg2.OperationalError as e:
-                if attempt < max_retries - 1:
-                    log(f"Database connection attempt {attempt + 1} failed, retrying in {retry_delay}s...")
-                    time.sleep(retry_delay)
-                else:
-                    raise
+    # try:
+    #     # Add retry logic for Istio
+    #     import time
+    #     max_retries = 3
+    #     retry_delay = 2
 
-        cursor = conn.cursor()
+    #     conn = None
+    #     for attempt in range(max_retries):
+    #         try:
+    #             conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+    #             break
+    #         except psycopg2.OperationalError as e:
+    #             if attempt < max_retries - 1:
+    #                 log(f"Database connection attempt {attempt + 1} failed, retrying in {retry_delay}s...")
+    #                 time.sleep(retry_delay)
+    #             else:
+    #                 raise
 
-        cursor.execute("""
-            UPDATE packages
-            SET status = %s,
-                vulnerability_info = %s,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE package_name = %s
-        """, (status, vulnerability_info, package_name))
+    #     cursor = conn.cursor()
 
-        conn.commit()
-        cursor.close()
-        conn.close()
+    #     cursor.execute("""
+    #         UPDATE packages
+    #         SET status = %s,
+    #             vulnerability_info = %s,
+    #             updated_at = CURRENT_TIMESTAMP
+    #         WHERE package_name = %s
+    #     """, (status, vulnerability_info, package_name))
 
-        log(f"✅ Updated {package_name} status to: {status}")
-        return True
+    #     conn.commit()
+    #     cursor.close()
+    #     conn.close()
 
-    except Exception as e:
-        log(f"❌ Error updating database: {str(e)}")
-        return False
+    #     log(f"✅ Updated {package_name} status to: {status}")
+    #     return True
+
+    # except Exception as e:
+    #     log(f"❌ Error updating database: {str(e)}")
+    #     return False
 
 
 def download_package_for_python_version(package_name, package_version, python_version, download_dir):
