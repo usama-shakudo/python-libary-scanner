@@ -11,13 +11,21 @@ except ImportError:
     print("Install with: pip3 install psycopg2-binary")
     exit(1)
 
-# Hardcoded Supabase DATABASE_URL (bypasses ConfigMap environment variable)
-DATABASE_URL = 'postgresql://postgres:CYo8ILCGUi@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
+from config import Config
+
+# Load database URL from environment variables via Config
+DATABASE_URL = Config.DATABASE_URL
+
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL not configured")
+    print("Make sure .env file exists with DATABASE_URL set")
+    exit(1)
 
 print("=" * 60)
 print("DATABASE CONNECTION TEST")
 print("=" * 60)
-print(f"Connection: {DATABASE_URL[:50]}...\n")
+# Don't print full URL to avoid exposing credentials
+print(f"Connection: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'configured'}\n")
 
 try:
     # Connect to database
@@ -83,5 +91,5 @@ try:
 
 except Exception as e:
     print(f"\n✗ ERROR: {str(e)}")
-    print("\nMake sure DATABASE_URL environment variable is set with password:")
-    print("export DATABASE_URL='postgresql://supabase_admin:PASSWORD@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'")
+    print("\nMake sure DATABASE_URL is configured in your .env file:")
+    print("DATABASE_URL=postgresql://user:password@host:5432/database")

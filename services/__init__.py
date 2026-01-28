@@ -1,7 +1,7 @@
 """
-Services package initialization
+Service layer for business logic
 """
 
-from .database_service import DatabaseService, init_database_service, get_database_service
+from .package_service import PackageService
 
-__all__ = ['DatabaseService', 'init_database_service', 'get_database_service']
+__all__ = ['PackageService']

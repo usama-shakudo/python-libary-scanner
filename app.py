@@ -1,48 +1,67 @@
 """
-Python Library Scanner API
-Main Flask application entry point
+Python Library Scanner API - Refactored
+Main Flask application with clean architecture
 """
 
+import logging
 from flask import Flask
 from flask_cors import CORS
-import logging
 
-from config import (
-    FLASK_HOST, FLASK_PORT, FLASK_DEBUG, LOG_LEVEL, LOG_FORMAT, PYPI_SERVER_URL,
-    DATABASE_URL
-)
-from routes import health_bp, simple_api_bp, packages_bp, api_bp
-from services import init_database_service
+from config import Config
+from database import init_database, close_database
+from routes.simple_api import simple_api_bp
 
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL),
-    format=LOG_FORMAT,
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
+# Initialize logging
+Config.init_logging()
 logger = logging.getLogger(__name__)
 
-# Create Flask application
-app = Flask(__name__)
 
-# Enable CORS
-CORS(app)
-DATABASE_URL = 'postgresql://postgres:CYo8ILCGUi@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
-# Initialize database service
-try:
-    init_database_service(DATABASE_URL)
-    logger.info("Database service initialized with Supabase URL (overriding ConfigMap)")
-except Exception as e:
-    logger.error(f"Failed to initialize database service: {str(e)}")
+def create_app():
+    """Application factory"""
+    app = Flask(__name__)
+    app.config.from_object(Config)
 
-# Register blueprints
-app.register_blueprint(health_bp)
-app.register_blueprint(simple_api_bp)
-app.register_blueprint(packages_bp)
-app.register_blueprint(api_bp)
+    # Enable CORS
+    CORS(app)
 
-if __name__ == '__main__':
-    logger.info(f"Starting Flask app with PyPI server: {PYPI_SERVER_URL}")
-    logger.info(f"Server will run on {FLASK_HOST}:{FLASK_PORT}")
-    app.run(debug=FLASK_DEBUG, host=FLASK_HOST, port=FLASK_PORT)
+    # Validate configuration
+    try:
+        Config.validate()
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        raise
+
+    # Initialize database
+    if not init_database():
+        logger.error("Failed to initialize database")
+        raise RuntimeError("Database initialization failed")
+
+    # Register blueprints
+    app.register_blueprint(simple_api_bp)
+
+    # Register cleanup with error logging
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        if exception:
+            logger.error(f"App context teardown error: {exception}")
+        close_database()
+
+    logger.info("Application initialized successfully")
+    return app
+
+
+# Only initialize app when not running as main (for tests/CLI)
+if __name__ != '__main__':
+    app = create_app()
+else:
+    # Running as main - create app and start server
+    logger.info(f"Starting server on {Config.FLASK_HOST}:{Config.FLASK_PORT}")
+    logger.info(f"PyPI Server: {Config.PYPI_SERVER_URL}")
+    logger.info(f"Environment: {Config.FLASK_ENV}")
+
+    app = create_app()
+    app.run(
+        host=Config.FLASK_HOST,
+        port=Config.FLASK_PORT,
+        debug=(Config.FLASK_ENV == 'development')
+    )
