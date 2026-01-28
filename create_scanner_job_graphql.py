@@ -184,7 +184,7 @@ def create_scanner_job_graphql(package_name):
     # Variables for the mutation
     variables = {
         "jobName": job_name,
-        "type": "package-scanner",
+        "type": "pythonimage",
         "imageHash": "",
         "noHyperplaneCommands": True,  # Important: We're not using Hyperplane commands
         "debuggable": False,
