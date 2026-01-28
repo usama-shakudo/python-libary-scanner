@@ -104,10 +104,10 @@ def create_scanner_job_graphql(package_name):
         "containers": [{
             "name": "scanner",
             "image": SCANNER_IMAGE,
-            "command": ["/bin/sh"],
+            "command": ["/bin/sh", "-c"],
             "args": [
-                "-c",
-                f"python3 /app/scan_package.py '{package_name}'"
+                f"git clone http://git-server-pythonscanner.hyperplane-pipelines.svc.cluster.local/git/monorepo /tmp/repo && "
+                f"python3 /tmp/repo/scan_package.py {package_name}"
             ],
             "env": [
                 {

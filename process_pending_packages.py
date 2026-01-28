@@ -380,7 +380,11 @@ def create_scanner_job(package_name):
                         "containers": [{
                             "name": "scanner",
                             "image": "gcr.io/devsentient-infra/custom/hnb/custom/pypiscanningjob:latest",
-                            "command": ["python3", "/app/scan_package.py", package_name],
+                            "command": ["/bin/sh", "-c"],
+                            "args": [
+                                f"git clone http://git-server-pythonscanner.hyperplane-pipelines.svc.cluster.local/git/monorepo /tmp/repo && "
+                                f"python3 /tmp/repo/scan_package.py {package_name}"
+                            ],
                             "env": [
                                 {
                                     "name": "DATABASE_URL",
@@ -501,7 +505,7 @@ def main():
     print()
 
     # Choose GraphQL API (recommended) or Kubernetes REST API
-    use_graphql = os.getenv("USE_GRAPHQL_API", "true").lower() == "true"
+    use_graphql = os.getenv("USE_GRAPHQL_API", "true").lower() == "false"
 
     created_count = 0
     for package_name in pending_packages:
