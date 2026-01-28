@@ -262,9 +262,17 @@ def create_scanner_job_graphql(package_name):
 if __name__ == "__main__":
     # Test
     import sys
-    if len(sys.argv) > 1:
-        package_name = sys.argv[1]
-        create_scanner_job_graphql(package_name)
+    TEST_MODE = True  # Set to False to require command line argument
+    TEST_PACKAGE = "requests==2.31.0"  # Change this to test different packages
+
+    if TEST_MODE and len(sys.argv) == 1:
+        log(f"🧪 TEST MODE: Using temporary package: {TEST_PACKAGE}")
+        package_spec = TEST_PACKAGE
+        create_scanner_job_graphql(TEST_PACKAGE)
+    elif len(sys.argv) != 2:
+        print("Usage: python scan_package.py <package_spec>")
+        print("Example: python scan_package.py requests==2.31.0")
+        sys.exit(1)
     else:
-        print("Usage: python create_scanner_job_graphql.py <package_name>")
-        print("Example: python create_scanner_job_graphql.py requests==2.31.0")
+        package_spec = sys.argv[1]
+   
