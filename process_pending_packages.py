@@ -377,6 +377,7 @@ def create_scanner_job(package_name):
                     },
                     "spec": {
                         "restartPolicy": "Never",
+                        "serviceAccountName": "package-scanner-scan",
                         "containers": [{
                             "name": "scanner",
                             "image": "gcr.io/devsentient-infra/custom/hnb/custom/pypiscanningjob:latest",
