@@ -241,6 +241,7 @@ def create_scanner_job_graphql(package_name):
         "timeout": 3600,  # 1 hour timeout
         "activeTimeout": 3600,
         "maxRetries": 2,
+        "schedule": "immediate",  # Important: Mark as immediate job
         "yamlPath": "scan_package.py",  # Just for reference
         "workingDir": "/tmp/git/monorepo/",
         "noGitInit": True,  # Important: We don't need git

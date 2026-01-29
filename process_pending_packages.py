@@ -54,13 +54,18 @@ def get_running_jobs_count():
         print(f"Step 1: Checking running jobs via GraphQL...")
 
         # Build GraphQL query to count jobs
-        # Exclude completed statuses: "done", "failed", "cancelled"
+        # Only count immediate jobs that are not completed
         where_conditions = {
             "AND": [
                 {
                     "jobName": {
                         "startsWith": "scanner-",
                         "mode": "insensitive"
+                    }
+                },
+                {
+                    "schedule": {
+                        "equals": "immediate"
                     }
                 },
                 {
@@ -411,6 +416,7 @@ def create_scanner_job_graphql(package_name):
             "timeout": 3600,  # 1 hour timeout
             "activeTimeout": 3600,
             "maxRetries": 2,
+            "schedule": "immediate",  # Important: Mark as immediate job
             "yamlPath": "scan_package.py",  # Just for reference
             "workingDir": "/tmp/git/monorepo/",
             "noGitInit": True,  # Important: We don't need git
@@ -487,7 +493,7 @@ def main():
 
     # 3. Fetch pending packages
     # pending_packages = get_pending_packages(available_slots)
-    pending_packages = ["pandas=3.0.0"]
+    pending_packages = ["pandas==3.0.0"]
     if not pending_packages:
         print("No pending packages found in database.")
         return
