@@ -68,7 +68,7 @@ def get_package_versions(package_name: str):
     Get all available versions of a Python package
     """
     try:
-        url = f"{Config.Config.PYPI_SERVER_URL}/{package_name}/json"
+        url = f"{Config.PYPI_SERVER_URL}/{package_name}/json"
         logger.info(f"Requesting package versions: {url}")
         response = requests.get(url, timeout=10)
 

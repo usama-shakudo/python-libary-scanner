@@ -10,7 +10,7 @@ import os
 import subprocess
 import tempfile
 import json
-# import psycopg2
+import psycopg2
 from datetime import datetime
 from pathlib import Path
 import glob
@@ -77,48 +77,45 @@ def parse_package_spec(package_spec):
 def update_package_status(package_name, status, vulnerability_info=None):
     """Update package status in database"""
     # TODO: Uncomment when psycopg2 is available
-    log(f"⚠️  DATABASE UPDATE SKIPPED (psycopg2 not available)")
-    log(f"   Would update {package_name} status to: {status}")
-    return True
 
-    # try:
-    #     # Add retry logic for Istio
-    #     import time
-    #     max_retries = 3
-    #     retry_delay = 2
+    try:
+        # Add retry logic for Istio
+        import time
+        max_retries = 3
+        retry_delay = 2
 
-    #     conn = None
-    #     for attempt in range(max_retries):
-    #         try:
-    #             conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
-    #             break
-    #         except psycopg2.OperationalError as e:
-    #             if attempt < max_retries - 1:
-    #                 log(f"Database connection attempt {attempt + 1} failed, retrying in {retry_delay}s...")
-    #                 time.sleep(retry_delay)
-    #             else:
-    #                 raise
+        conn = None
+        for attempt in range(max_retries):
+            try:
+                conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+                break
+            except psycopg2.OperationalError as e:
+                if attempt < max_retries - 1:
+                    log(f"Database connection attempt {attempt + 1} failed, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    raise
 
-    #     cursor = conn.cursor()
+        cursor = conn.cursor()
 
-    #     cursor.execute("""
-    #         UPDATE packages
-    #         SET status = %s,
-    #             vulnerability_info = %s,
-    #             updated_at = CURRENT_TIMESTAMP
-    #         WHERE package_name = %s
-    #     """, (status, vulnerability_info, package_name))
+        cursor.execute("""
+            UPDATE packages
+            SET status = %s,
+                vulnerability_info = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE package_name = %s
+        """, (status, vulnerability_info, package_name))
 
-    #     conn.commit()
-    #     cursor.close()
-    #     conn.close()
+        conn.commit()
+        cursor.close()
+        conn.close()
 
-    #     log(f"✅ Updated {package_name} status to: {status}")
-    #     return True
+        log(f"✅ Updated {package_name} status to: {status}")
+        return True
 
-    # except Exception as e:
-    #     log(f"❌ Error updating database: {str(e)}")
-    #     return False
+    except Exception as e:
+        log(f"❌ Error updating database: {str(e)}")
+        return False
 
 
 def download_package_for_python_version(package_name, package_version, python_version, download_dir):
@@ -424,19 +421,28 @@ def scan_and_upload_package(package_name, package_version):
 
 def main():
     """Main entry point"""
-    # TEST MODE: Set a temporary package for testing
-    TEST_MODE = True  # Set to False to require command line argument
-    TEST_PACKAGE = "requests==2.31.0"  # Change this to test different packages
+    # Get package spec from environment variable (preferred) or command-line argument
+    package_spec = os.getenv('PACKAGE_NAME')
 
-    if TEST_MODE and len(sys.argv) == 1:
-        log(f"🧪 TEST MODE: Using temporary package: {TEST_PACKAGE}")
-        package_spec = TEST_PACKAGE
-    elif len(sys.argv) != 2:
-        print("Usage: python scan_package.py <package_spec>")
-        print("Example: python scan_package.py requests==2.31.0")
-        sys.exit(1)
-    else:
+    if package_spec:
+        log(f"📦 Package from environment: {package_spec}")
+    elif len(sys.argv) == 2:
         package_spec = sys.argv[1]
+        log(f"📦 Package from command-line: {package_spec}")
+    else:
+        # TEST MODE: Set a temporary package for testing
+        TEST_MODE = True  # Set to False to require either env var or command-line arg
+        TEST_PACKAGE = "requests==2.31.0"  # Change this to test different packages
+
+        if TEST_MODE:
+            log(f"🧪 TEST MODE: Using temporary package: {TEST_PACKAGE}")
+            package_spec = TEST_PACKAGE
+        else:
+            print("Usage: python scan_package.py <package_spec>")
+            print("   OR: Set PACKAGE_NAME environment variable")
+            print("Example: python scan_package.py requests==2.31.0")
+            print("Example: PACKAGE_NAME=requests==2.31.0 python scan_package.py")
+            sys.exit(1)
 
     log(f"🚀 Package Scanner Starting - Multi-Version Support")
     log(f"   Python versions: {', '.join(PYTHON_VERSIONS)}")

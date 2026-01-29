@@ -18,9 +18,9 @@ from datetime import datetime
 
 # Hyperplane GraphQL Configuration
 HYPERPLANE_GRAPHQL_URL = os.getenv("HYPERPLANE_GRAPHQL_URL", "http://api-server.hyperplane-core.svc.cluster.local/graphql")
-HYPERPLANE_USER_ID = os.getenv("HYPERPLANE_USER_ID", "0e71f618-bff9-49a7-a77e-81d201503fe1")
+HYPERPLANE_USER_ID = os.getenv("HYPERPLANE_USER_ID", "3630abbd-289b-4d78-85d0-fcf7bcb3cc81")
 HYPERPLANE_USER_EMAIL = os.getenv("HYPERPLANE_USER_EMAIL", "shakudo-admin@shakudo.io")
-HYPERPLANE_VC_SERVER_ID = os.getenv("HYPERPLANE_VC_SERVER_ID", "654cabbc-0b09-416b-8efa-b880a5a343571")
+HYPERPLANE_VC_SERVER_ID = os.getenv("HYPERPLANE_VC_SERVER_ID", "c4be4cb1-9623-4d00-abcb-b472e9a4f192")
 
 # Scanner Configuration
 SCANNER_IMAGE = os.getenv("SCANNER_IMAGE", "gcr.io/devsentient-infra/custom/hnb/custom/pypiscanningjob:latest")
@@ -80,9 +80,9 @@ def create_scanner_job_graphql(package_name):
     pod_spec = {
         "priorityClassName": "shakudo-job-default",
         "restartPolicy": "Never",
-        "serviceAccountName": "package-scanner-scan",
+        "serviceAccountName": "gcr-pipelines",
         "nodeSelector": {
-           
+            "hyperplane.dev/nodeType": "hyperplane-system-pool"
         },
         "tolerations": [{
             "effect": "NoSchedule",
@@ -96,71 +96,123 @@ def create_scanner_job_graphql(package_name):
                 "secret": {
                     "secretName": "service-account-key-pipelines-dccri9ba"
                 }
+            },
+            {
+                "name": "gitrepo",
+                "emptyDir": {}
+            },
+            {
+                "name": "github-key",
+                "secret": {
+                    "secretName": "python-package-scanner-deploy-key",
+                    "defaultMode": 400
+                }
             }
         ],
         "securityContext": {
             "fsGroup": 65533
         },
-        "containers": [{
-            "name": "scanner",
-            "image": SCANNER_IMAGE,
-            "command": ["python3", "/app/scan_package.py", package_name],
-            "env": [
-                {
-                    "name": "DATABASE_URL",
-                    "value": DATABASE_URL
-                },
-                {
-                    "name": "PYPI_SERVER_URL",
-                    "value": os.getenv("PYPI_SERVER_URL", "http://pypiserver.hyperplane-pypiserver.svc.cluster.local:8080")
-                },
-                {
-                    "name": "PYPI_USERNAME",
-                    "value": os.getenv("PYPI_USERNAME", "username")
-                },
-                {
-                    "name": "PYPI_PASSWORD",
-                    "value": os.getenv("PYPI_PASSWORD", "password")
-                },
-                {
-                    "name": "PYTHON_VERSIONS",
-                    "value": os.getenv("PYTHON_VERSIONS", "3.9 3.10 3.11 3.12")
-                },
-                {
-                    "name": "MY_POD_NAME",
-                    "valueFrom": {
-                        "fieldRef": {
-                            "fieldPath": "metadata.name"
-                        }
+        "initContainers": [
+            {
+                "name": "node-ip-monitor",
+                "image": "gcr.io/devsentient-infra/dev/add-pod-label-container:edbe221f844dc6d7e47ed6a7c8163c71192ef838",
+                "command": ["/bin/bash"],
+                "args": ["-c", "python3 /usr/local/bin/add_node_ip_label.py"],
+                "env": [
+                    {
+                        "name": "NODE_IP",
+                        "valueFrom": {"fieldRef": {"fieldPath": "status.hostIP"}}
+                    },
+                    {
+                        "name": "NODE_NAME",
+                        "valueFrom": {"fieldRef": {"fieldPath": "spec.nodeName"}}
+                    },
+                    {
+                        "name": "POD_NAME",
+                        "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}
+                    },
+                    {
+                        "name": "POD_NAMESPACE",
+                        "valueFrom": {"fieldRef": {"fieldPath": "metadata.namespace"}}
+                    },
+                    {
+                        "name": "HYPERPLANE__DEFAULT_NAMESPACE",
+                        "value": "hyperplane-core"
                     }
-                },
-                {
-                    "name": "MY_POD_NAMESPACE",
-                    "valueFrom": {
-                        "fieldRef": {
-                            "fieldPath": "metadata.namespace"
-                        }
-                    }
-                }
-            ],
-            "volumeMounts": [
-                {
-                    "name": "gke-service-account-json",
-                    "mountPath": "/etc/gke-service-account-json",
-                    "readOnly": True
-                }
-            ],
-            "resources": {
-                "limits": {
-                    "cpu": "2000m",
-                    "memory": "2Gi"
-                },
-                "requests": {
-                    "cpu": "500m",
-                    "memory": "512Mi"
+                ]
+            },
+            {
+                "name": "git-sync-init",
+                "image": SCANNER_IMAGE,
+                "command": ["/bin/sh"],
+                "args": [
+                    "-c",
+                    f"mkdir -p /root/.ssh && cp /etc/git-secret/* /root/.ssh/ && chmod 400 /root/.ssh/id_rsa && "
+                    f"((GIT_SSH_COMMAND=\"ssh -o StrictHostKeyChecking=no\" git clone --depth 1 "
+                    f"git@git-server-python-package-scanner.hyperplane-pipelines.svc.cluster.local:/tmp/git/monorepo /tmp/git/monorepo) || "
+                    f"(GIT_SSH_COMMAND=\"ssh -o StrictHostKeyChecking=no\" git clone --depth 1 --branch main "
+                    f"git@github.com:usama-shakudo/python-libary-scanner.git /tmp/git/monorepo)) && "
+                    f"echo \"Running from commit: $(cd /tmp/git/monorepo && git rev-parse HEAD 2>/dev/null || echo 'could not print commit id')\""
+                ],
+                "volumeMounts": [
+                    {"name": "gitrepo", "mountPath": "/tmp/git"},
+                    {"name": "github-key", "mountPath": "/etc/git-secret", "readOnly": True}
+                ],
+                "resources": {
+                    "limits": {"cpu": "200m", "memory": "512Mi"}
                 }
             }
-        }]
+        ],
+        "containers": [
+            {
+                "name": "d2v-pipeline",
+                "image": SCANNER_IMAGE,
+                "workingDir": "/tmp/git/monorepo/",
+                "command": ["/bin/sh"],
+                "args": [
+                    "-c",
+                    "env > /etc/environment && "
+                    "echo $SERVICE_ACCOUNT_KEY_CONTENT > /etc/service_account_key_content && "
+                    "chmod +x /tmp/git/monorepo/scan_package.py && "
+                    "/tmp/git/monorepo/scan_package.py"
+                ],
+                "env": [
+                    {"name": "PACKAGE_NAME", "value": package_name},
+                    {"name": "DATABASE_URL", "value": DATABASE_URL},
+                    {"name": "PYPI_SERVER_URL", "value": os.getenv("PYPI_SERVER_URL", "http://pypiserver-pypiserver.hyperplane-pypiserver.svc.cluster.local:8080")},
+                    {"name": "PYPI_USERNAME", "value": os.getenv("PYPI_USERNAME", "username")},
+                    {"name": "PYPI_PASSWORD", "value": os.getenv("PYPI_PASSWORD", "password")},
+                    {"name": "PYTHON_VERSIONS", "value": os.getenv("PYTHON_VERSIONS", "3.9 3.10 3.11 3.12")},
+                    {"name": "MY_POD_NAME", "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}},
+                    {"name": "MY_POD_NAMESPACE", "valueFrom": {"fieldRef": {"fieldPath": "metadata.namespace"}}},
+                    {"name": "MY_NODE_IP", "valueFrom": {"fieldRef": {"fieldPath": "status.podIP"}}},
+                    {"name": "HYPERPLANE_JOB_CHECKED_COMMIT_ID", "value": ""},
+                    {"name": "HYPERPLANE_JOB_CHECKED_BRANCH_NAME", "value": "main"},
+                    {"name": "HYPERPLANE_JOB_DEBUGGABLE", "value": "false"},
+                    {"name": "PIPELINES_USER", "value": "usama"},
+                    {"name": "USER_EMAIL", "value": "usama@shakudo.io"},
+                    {"name": "HYPERPLANE_JOB_PIPELINE_YAML_PATH", "value": "scan_package.py"}
+                ],
+                "volumeMounts": [
+                    {"name": "gitrepo", "mountPath": "/tmp/git"},
+                    {"name": "gke-service-account-json", "mountPath": "/etc/gke-service-account-json", "readOnly": True}
+                ],
+                "resources": {
+                    "limits": {"cpu": "500m", "memory": "2Gi"},
+                    "requests": {"cpu": "500m", "memory": "2Gi"}
+                }
+            },
+            {
+                "name": "sidecar-terminator",
+                "image": "gcr.io/devsentient-infra/dev/sidecar-terminator:0f74575067e596d757590ee7e5a7536eb5ab53e7",
+                "ports": [{"name": "http", "containerPort": 9092, "protocol": "TCP"}],
+                "env": [
+                    {"name": "MY_POD_NAME", "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}},
+                    {"name": "MY_POD_NAMESPACE", "valueFrom": {"fieldRef": {"fieldPath": "metadata.namespace"}}}
+                ],
+                "resources": {"requests": {"cpu": "64m"}}
+            }
+        ]
     }
 
     # GraphQL mutation
@@ -182,7 +234,7 @@ def create_scanner_job_graphql(package_name):
         "jobName": job_name,
         "type": "python_base_image",
         "imageHash": "",
-        "noHyperplaneCommands": True,  # Important: We're not using Hyperplane commands
+        "noHyperplaneCommands": False,  # Must be False for proper execution
         "debuggable": False,
         "notificationsEnabled": False,
         "notificationTargetIds": [],
@@ -262,7 +314,7 @@ if __name__ == "__main__":
     TEST_PACKAGE = "requests==2.31.0"  # Change this to test different packages
 
     if TEST_MODE and len(sys.argv) == 1:
-        log(f"🧪 TEST MODE: Using temporary package: {TEST_PACKAGE}")
+        print(f"🧪 TEST MODE: Using temporary package: {TEST_PACKAGE}")
         package_spec = TEST_PACKAGE
         create_scanner_job_graphql(TEST_PACKAGE)
     elif len(sys.argv) != 2:
