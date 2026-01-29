@@ -15,7 +15,7 @@ from datetime import datetime
 MAX_CONCURRENT_JOBS = 10
 JOB_NAME_PREFIX = "package"
 NAMESPACE = "hyperplane-pipelines"
-DATABASE_URL = "postgresql://postgres:CYo8ILCGUi@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres"
+DATABASE_URL = "postgresql://postgres:Y2dtcJhdFW@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres"
 
 # Scanner Docker image
 SCANNER_IMAGE = os.getenv("SCANNER_IMAGE", "gcr.io/devsentient-infra/custom/hnb/custom/pypiscanningjob:latest")

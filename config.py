@@ -27,7 +27,7 @@ class Config:
     # PyPI Server
     PYPI_SERVER_URL = os.getenv(
         'PYPI_SERVER_URL',
-        'http://pypiserver.hyperplane-pypiserver.svc.cluster.local:8080'
+        'http://pypiserver-pypiserver.hyperplane-pypiserver.svc.cluster.local:8080'
     )
     PYPI_USERNAME = os.getenv('PYPI_USERNAME')
     PYPI_PASSWORD = os.getenv('PYPI_PASSWORD')

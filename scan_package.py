@@ -19,12 +19,12 @@ import re
 # Configuration
 DATABASE_URL = os.getenv(
     'DATABASE_URL',
-    'postgresql://postgres:CYo8ILCGUi@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
+    'postgresql://postgres:Y2dtcJhdFW@supabase-postgresql.hyperplane-supabase.svc.cluster.local:5432/postgres'
 )
 
 PYPI_SERVER_URL = os.getenv(
     'PYPI_SERVER_URL',
-    'http://pypiserver.hyperplane-pypiserver.svc.cluster.local:8080'
+    'http://pypiserver-pypiserver.hyperplane-pypiserver.svc.cluster.local:8080'
 )
 
 PYPI_USERNAME = os.getenv('PYPI_USERNAME', 'username')
