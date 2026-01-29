@@ -49,6 +49,7 @@ class PackageController:
             # Not on PyPI - check database for status
             status, vuln_info = self.package_service.check_package_status(package_name)
 
+            #TODO: Move status to an enum
             if status == 'safe':
                 # Safe but pending scan
                 return self._respond_pending(package_name)
