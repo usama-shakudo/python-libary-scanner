@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request
 import requests
 import logging
 
-from config import PYPI_SERVER_URL
+from config import Config
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ def get_package_info(package_name: str):
     Get detailed information about a Python package
     """
     try:
-        url = f"{PYPI_SERVER_URL}/{package_name}/json"
+        url = f"{Config.PYPI_SERVER_URL}/{package_name}/json"
         logger.info(f"Requesting package info: {url}")
         response = requests.get(url, timeout=10)
 
@@ -68,7 +68,7 @@ def get_package_versions(package_name: str):
     Get all available versions of a Python package
     """
     try:
-        url = f"{PYPI_SERVER_URL}/{package_name}/json"
+        url = f"{Config.Config.PYPI_SERVER_URL}/{package_name}/json"
         logger.info(f"Requesting package versions: {url}")
         response = requests.get(url, timeout=10)
 

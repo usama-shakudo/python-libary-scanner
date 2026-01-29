@@ -7,7 +7,7 @@ from flask import Blueprint, request, Response
 import requests
 import logging
 
-from config import PYPI_SERVER_URL
+from config import Config
 
 packages_bp = Blueprint('packages', __name__, url_prefix='/packages')
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def download_package(filename: str):
         logger.info(f"Request Remote Address: {request.remote_addr}")
 
         # Proxy from PyPI server
-        url = f"{PYPI_SERVER_URL}/packages/{filename}"
+        url = f"{Config.PYPI_SERVER_URL}/packages/{filename}"
         logger.info(f"Proxying to: {url}")
 
         response = requests.get(url, stream=True, timeout=30)
