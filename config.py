@@ -19,8 +19,9 @@ class Config:
     FLASK_ENV = os.getenv('FLASK_ENV', 'production')
 
     # Database
-    DATABASE_URL = os.getenv('DATABASE_URL')
-    SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    SUPABASE_DATABASE_URL = os.getenv('SUPABASE_DATABASE_URL')
+    DATABASE_URL = SUPABASE_DATABASE_URL  # Alias for backward compatibility
+    SQLALCHEMY_DATABASE_URI = SUPABASE_DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = os.getenv('FLASK_ENV') == 'development'
 
@@ -75,7 +76,7 @@ class Config:
     @classmethod
     def validate(cls):
         """Validate required configuration"""
-        required = ['DATABASE_URL', 'PYPI_SERVER_URL']
+        required = ['SUPABASE_DATABASE_URL', 'PYPI_SERVER_URL']
         missing = [key for key in required if not getattr(cls, key)]
         if missing:
             raise ValueError(f"Missing required configuration: {', '.join(missing)}")

@@ -14,11 +14,11 @@ except ImportError:
 from config import Config
 
 # Load database URL from environment variables via Config
-DATABASE_URL = Config.DATABASE_URL
+DATABASE_URL = Config.SUPABASE_DATABASE_URL
 
 if not DATABASE_URL:
-    print("ERROR: DATABASE_URL not configured")
-    print("Make sure .env file exists with DATABASE_URL set")
+    print("ERROR: SUPABASE_DATABASE_URL not configured")
+    print("Make sure .env file exists with SUPABASE_DATABASE_URL set")
     exit(1)
 
 print("=" * 60)
@@ -84,5 +84,5 @@ try:
 
 except Exception as e:
     print(f"\n✗ ERROR: {str(e)}")
-    print("\nMake sure DATABASE_URL is configured in your .env file:")
-    print("DATABASE_URL=postgresql://user:password@host:5432/database")
+    print("\nMake sure SUPABASE_DATABASE_URL is configured in your .env file:")
+    print("SUPABASE_DATABASE_URL=postgresql://user:password@host:5432/database")

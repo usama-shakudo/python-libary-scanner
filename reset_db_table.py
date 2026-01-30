@@ -4,7 +4,7 @@ Drop the packages table and let SQLAlchemy recreate it with the correct schema
 import psycopg2
 from config import Config
 
-DATABASE_URL = Config.DATABASE_URL
+DATABASE_URL = Config.SUPABASE_DATABASE_URL
 
 print("Dropping and recreating packages table...")
 try:
