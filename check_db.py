@@ -47,18 +47,11 @@ try:
         print("✓ Table 'packages' exists")
     else:
         print("✗ Table 'packages' does NOT exist")
-        print("\nCreating table...")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS packages (
-                package_name VARCHAR(255) PRIMARY KEY,
-                status VARCHAR(50) NOT NULL,
-                vulnerability_info TEXT,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-        print("✓ Table created")
+        print("\nTable should be created by Flask app on startup.")
+        print("Please start your Flask app (python3 app.py) to create the table.")
+        cursor.close()
+        conn.close()
+        exit(0)
 
     # Query all packages
     print("\n" + "=" * 60)
