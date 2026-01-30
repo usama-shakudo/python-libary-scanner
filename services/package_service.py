@@ -42,9 +42,9 @@ class PackageService:
             logger.info(f"📥 PyPI Response - Content-Length: {len(response.content)} bytes")
 
             if response.status_code == 200:
-                # Log first 500 chars of HTML content for debugging
-                content_preview = response.text[:500] if len(response.text) > 500 else response.text
-                logger.debug(f"📄 PyPI Response - Content preview:\n{content_preview}")
+                # Log first 1000 chars of HTML content for debugging
+                content_preview = response.text[:1000] if len(response.text) > 1000 else response.text
+                logger.info(f"📄 PyPI Response - Content preview:\n{content_preview}")
                 logger.info(f"✅ Package '{package_name}' found on internal PyPI")
                 return (True, response.content, dict(response.headers))
 
