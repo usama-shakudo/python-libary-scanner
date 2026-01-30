@@ -10,6 +10,8 @@ from flask_cors import CORS
 from config import Config
 from database import init_database, close_database
 from routes.simple_api import simple_api_bp
+from routes.packages import packages_bp
+from routes.api import api_bp
 
 # Initialize logging
 Config.init_logging()
@@ -37,7 +39,9 @@ def create_app():
         raise RuntimeError("Database initialization failed")
 
     # Register blueprints
-    app.register_blueprint(simple_api_bp)
+    app.register_blueprint(simple_api_bp)  # /simple/ - PyPI Simple API (security gatekeeper)
+    app.register_blueprint(packages_bp)    # /packages/ - Package file downloads
+    app.register_blueprint(api_bp)         # /api/ - JSON API for monitoring
 
     # Register cleanup with error logging
     @app.teardown_appcontext

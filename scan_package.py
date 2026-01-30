@@ -16,6 +16,16 @@ from pathlib import Path
 import glob
 import re
 
+# Package Status Constants (matching models/package.py PackageStatus enum)
+STATUS_PENDING = "pending"           # Waiting for scan job to start
+STATUS_DOWNLOADED = "downloaded"     # Downloaded from external PyPI
+STATUS_COMPLETED = "completed"       # Scanned, safe, uploaded to internal PyPI
+STATUS_VULNERABLE = "vulnerable"     # Has vulnerabilities (blocked)
+STATUS_NOT_FOUND = "not_found"      # Package doesn't exist on external PyPI
+STATUS_DOWNLOAD_ERROR = "download_error"  # Failed to download
+STATUS_SCAN_ERROR = "scan_error"    # Download OK, but scan failed
+STATUS_ERROR = "error"              # Other/unknown error
+
 # Configuration
 DATABASE_URL = os.getenv(
     'DATABASE_URL',
@@ -30,8 +40,9 @@ PYPI_SERVER_URL = os.getenv(
 PYPI_USERNAME = os.getenv('PYPI_USERNAME', 'username')
 PYPI_PASSWORD = os.getenv('PYPI_PASSWORD', 'password')
 
-# Python versions to support (can be overridden via environment variable)
-PYTHON_VERSIONS = os.getenv('PYTHON_VERSIONS', '3.9 3.10 3.11 3.12').split()
+# Target Python version for this scan (from pip request)
+# Format: "3.10" or "3.11" (major.minor)
+TARGET_PYTHON_VERSION = os.getenv('PYTHON_VERSION', '3.11')  # Default to 3.11
 
 # Disable scanning for testing
 DISABLE_SCAN_AUDIT = os.getenv('DISABLE_SCAN_AUDIT', 'false').lower() == 'true'
@@ -74,10 +85,8 @@ def parse_package_spec(package_spec):
         raise ValueError(f"Invalid package specification: {package_spec}. Expected format: packagename==version")
 
 
-def update_package_status(package_name, status, vulnerability_info=None):
+def update_package_status(package_name, status, vulnerability_info=None, error_message=None):
     """Update package status in database"""
-    # TODO: Uncomment when psycopg2 is available
-
     try:
         # Add retry logic for Istio
         import time
@@ -102,9 +111,10 @@ def update_package_status(package_name, status, vulnerability_info=None):
             UPDATE packages
             SET status = %s,
                 vulnerability_info = %s,
+                error_message = %s,
                 updated_at = CURRENT_TIMESTAMP
             WHERE package_name = %s
-        """, (status, vulnerability_info, package_name))
+        """, (status, vulnerability_info, error_message, package_name))
 
         conn.commit()
         cursor.close()
@@ -187,35 +197,36 @@ def download_package_for_python_version(package_name, package_version, python_ve
         return None
 
 
-def download_packages_for_all_versions(package_name, package_version, download_dir):
+def download_package_for_target_version(package_name, package_version, python_version, download_dir):
     """
-    Download a package for all configured Python versions
-    Smart detection: if universal package found, skip other versions
+    Download a package for the target Python version only
+
+    Args:
+        package_name: Name of the package
+        package_version: Version of the package
+        python_version: Target Python version (e.g., "3.10")
+        download_dir: Directory to download to
+
+    Returns:
+        list: List of downloaded package files (empty if failed)
     """
-    log(f"📦 Downloading {package_name}=={package_version} for multiple Python versions...")
+    log(f"📦 Downloading {package_name}=={package_version} for Python {python_version}...")
 
-    downloaded_files = []
+    package_file = download_package_for_python_version(
+        package_name, package_version, python_version, download_dir
+    )
 
-    for py_version in PYTHON_VERSIONS:
-        package_file = download_package_for_python_version(
-            package_name, package_version, py_version, download_dir
-        )
-
-        if package_file:
-            # Check if this is a universal package
-            if is_universal_package(package_file):
-                log(f"   🌍 Universal package detected! Works for all Python versions.")
-                log(f"   ⏭️  Skipping downloads for remaining Python versions.")
-                return [package_file]
-
-            downloaded_files.append(package_file)
-
-    if not downloaded_files:
-        log(f"   ❌ Failed to download package for any Python version")
+    if not package_file:
+        log(f"   ❌ Failed to download package for Python {python_version}")
         return []
 
-    log(f"   📊 Downloaded {len(downloaded_files)} version-specific package(s)")
-    return downloaded_files
+    # Check if this is a universal package
+    if is_universal_package(package_file):
+        log(f"   🌍 Universal package detected! Works for all Python versions.")
+    else:
+        log(f"   📦 Downloaded version-specific package for Python {python_version}")
+
+    return [package_file]
 
 
 def scan_package_vulnerabilities(package_name, package_version, scan_dir):
@@ -326,40 +337,46 @@ def upload_to_pypi(package_file):
         return False
 
 
-def scan_and_upload_package(package_name, package_version):
+def scan_and_upload_package(package_name, package_version, python_version):
     """Main scanning and upload workflow"""
     log(f"=" * 60)
     log(f"📦 Processing package: {package_name}=={package_version}")
+    log(f"🐍 Target Python version: {python_version}")
     log(f"=" * 60)
 
     # Create temporary directory for downloads
     with tempfile.TemporaryDirectory() as download_dir:
         log(f"📂 Using temporary directory: {download_dir}")
 
-        # Step 1: Download packages for all Python versions
-        log(f"\n🔸 STEP 1: Download Packages")
-        package_files = download_packages_for_all_versions(
-            package_name, package_version, download_dir
+        # Step 1: Download package for target Python version
+        log(f"\n🔸 STEP 1: Download Package")
+        package_files = download_package_for_target_version(
+            package_name, package_version, python_version, download_dir
         )
 
         if not package_files:
-            log(f"❌ FAILED: Could not download package")
+            log(f"❌ FAILED: Could not download package for Python {python_version}")
             update_package_status(
                 package_name,
-                "error",
-                json.dumps({"error": "Failed to download package"})
+                STATUS_NOT_FOUND,
+                error_message=f"Package not available for Python {python_version}. The package may exist for other Python versions."
             )
             return False
 
+        # Mark as downloaded
+        log(f"✅ Download successful - updating status to 'downloaded'")
+        update_package_status(package_name, STATUS_DOWNLOADED)
+
         # Step 2: Scan for vulnerabilities
+        log(f"\n🔸 STEP 2: Scan for Vulnerabilities")
         scan_result = scan_package_vulnerabilities(package_name, package_version, download_dir)
 
         if scan_result is None:
             log(f"❌ FAILED: Scan encountered an error")
             update_package_status(
                 package_name,
-                "error",
-                json.dumps({"error": "Scan failed"})
+                STATUS_SCAN_ERROR,
+                error_message="Vulnerability scan failed"
             )
             return False
 
@@ -374,7 +391,7 @@ def scan_and_upload_package(package_name, package_version):
                 "scanner": "trivy"
             })
 
-            update_package_status(package_name, "vulnerable", vulnerability_info)
+            update_package_status(package_name, STATUS_VULNERABLE, vulnerability_info)
             log(f"⛔ Package marked as VULNERABLE - not uploading to PyPI")
             return False
 
@@ -393,12 +410,12 @@ def scan_and_upload_package(package_name, package_version):
                 log(f"❌ FAILED: Some uploads to PyPI failed")
                 update_package_status(
                     package_name,
-                    "error",
-                    json.dumps({"error": "Failed to upload to PyPI"})
+                    STATUS_ERROR,
+                    error_message="Failed to upload to internal PyPI server"
                 )
                 return False
 
-            log(f"\n🔸 STEP 4: Update Database (SAFE)")
+            log(f"\n🔸 STEP 4: Update Database (COMPLETED)")
 
             vulnerability_info = json.dumps({
                 "vulnerabilities": [],
@@ -406,11 +423,11 @@ def scan_and_upload_package(package_name, package_version):
                 "scanner": "trivy",
                 "uploaded_to_pypi": True,
                 "note": scan_result.get("note"),
-                "python_versions": PYTHON_VERSIONS
+                "python_version": python_version
             })
 
-            update_package_status(package_name, "safe", vulnerability_info)
-            log(f"✅ Package marked as SAFE and uploaded to PyPI")
+            update_package_status(package_name, STATUS_COMPLETED, vulnerability_info)
+            log(f"✅ Package marked as COMPLETED - scanned, safe, and uploaded to PyPI")
 
     log(f"\n" + "=" * 60)
     log(f"✅ Processing complete for: {package_name}=={package_version}")
@@ -444,8 +461,8 @@ def main():
             print("Example: PACKAGE_NAME=requests==2.31.0 python scan_package.py")
             sys.exit(1)
 
-    log(f"🚀 Package Scanner Starting - Multi-Version Support")
-    log(f"   Python versions: {', '.join(PYTHON_VERSIONS)}")
+    log(f"🚀 Package Scanner Starting")
+    log(f"   Target Python version: {TARGET_PYTHON_VERSION}")
     log(f"   Vulnerability scanner: trivy")
     log(f"   Package: {package_spec}")
     log(f"   PyPI Server: {PYPI_SERVER_URL}")
@@ -455,7 +472,7 @@ def main():
         package_name, package_version = parse_package_spec(package_spec)
         log(f"   Parsed: {package_name} version {package_version}")
 
-        success = scan_and_upload_package(package_name, package_version)
+        success = scan_and_upload_package(package_name, package_version, TARGET_PYTHON_VERSION)
         sys.exit(0 if success else 1)
 
     except ValueError as e:
@@ -477,8 +494,8 @@ def main():
 
             update_package_status(
                 package_name,
-                "error",
-                json.dumps({"error": f"Fatal error: {str(e)}"})
+                STATUS_ERROR,
+                error_message=f"Fatal error: {str(e)}"
             )
         except:
             pass

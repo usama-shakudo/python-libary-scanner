@@ -7,6 +7,7 @@ import requests
 import logging
 
 from config import Config
+from controllers.package_controller import PackageController
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 logger = logging.getLogger(__name__)
@@ -130,48 +131,34 @@ def search_packages():
 @api_bp.route('/db/packages')
 def list_db_packages():
     """
-    List all packages in database (for debugging)
+    List all packages in database
     """
-    from services import get_database_service
-    from psycopg2.extras import RealDictCursor
+    controller = PackageController.create_with_db()
+    return controller.list_all_packages()
 
-    db_service = get_database_service()
-    if not db_service:
-        return jsonify({
-            "error": "Database not available",
-            "message": "Database service not initialized"
-        }), 503
 
-    try:
-        with db_service.get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute("""
-                    SELECT package_name, status, vulnerability_info,
-                           created_at, updated_at
-                    FROM packages
-                    ORDER BY created_at DESC
-                """)
-                packages = cursor.fetchall()
+@api_bp.route('/db/packages/pending')
+def list_pending_packages():
+    """
+    List only pending packages in database
+    """
+    controller = PackageController.create_with_db()
+    return controller.list_pending_packages()
 
-                # Convert to JSON-serializable format
-                result = []
-                for pkg in packages:
-                    result.append({
-                        "package_name": pkg['package_name'],
-                        "status": pkg['status'],
-                        "vulnerability_info": pkg['vulnerability_info'],
-                        "created_at": pkg['created_at'].isoformat() if pkg['created_at'] else None,
-                        "updated_at": pkg['updated_at'].isoformat() if pkg['updated_at'] else None
-                    })
 
-                return jsonify({
-                    "total": len(result),
-                    "packages": result
-                }), 200
+@api_bp.route('/db/packages/stats')
+def get_package_stats():
+    """
+    Get statistics about packages by status
+    """
+    controller = PackageController.create_with_db()
+    return controller.get_package_stats()
 
-    except Exception as e:
-        logger.error(f"Error fetching packages from DB: {str(e)}")
-        return jsonify({
-            "error": "Database query failed",
-            "details": str(e)
-        }), 500
+
+@api_bp.route('/pypi/packages')
+def list_pypi_packages():
+    """
+    List all packages available in internal PyPI server
+    """
+    controller = PackageController.create_with_db()
+    return controller.list_pypi_packages()

@@ -30,9 +30,7 @@ class Config:
         'HYPERPLANE_CUSTOM_SECRET_KEY_PYPI_SERVER_URL',
         'http://pypiserver-pypiserver.hyperplane-pypiserver.svc.cluster.local:8080'
     )
-    PYPI_USERNAME = os.getenv('HYPERPLANE_CUSTOM_SECRET_KEY_PYPI_USERNAME')
-    PYPI_PASSWORD = os.getenv('HYPERPLANE_CUSTOM_SECRET_KEY_PYPI_PASSWORD')
-
+    
     # Hyperplane API
     HYPERPLANE_GRAPHQL_URL = os.getenv(
         'HYPERPLANE_CUSTOM_SECRET_KEY_HYPERPLANE_GRAPHQL_URL',

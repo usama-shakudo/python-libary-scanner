@@ -5,10 +5,11 @@ Clean architecture: Route -> Controller -> Service -> Repository -> Model
 
 import logging
 import requests
-from flask import Blueprint, Response, g
+from flask import Blueprint, Response, g, request
 from config import Config
 from database import get_session
 from controllers.package_controller import PackageController
+from utils.version_parser import parse_python_version, parse_package_and_version
 
 logger = logging.getLogger(__name__)
 simple_api_bp = Blueprint('simple_api', __name__, url_prefix='/simple')
@@ -56,8 +57,15 @@ def simple_package(package_name: str):
     Simple Repository API - Package Links (PEP 503)
     Uses PackageController with per-request DB session
     """
+    # Extract User-Agent header for Python version
+    user_agent = request.headers.get('User-Agent', '')
+    python_version = parse_python_version(user_agent)
+
+    # Parse package name and version from request
+    parsed_name, version = parse_package_and_version(package_name)
+
     controller = PackageController.create_with_db()
-    return controller.get_package(package_name)
+    return controller.get_package(parsed_name, version, python_version)
 
 
 @simple_api_bp.route('/')

@@ -155,7 +155,7 @@ def get_pending_packages(limit):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         cursor.execute("""
-            SELECT package_name
+            SELECT package_name, version, python_version
             FROM packages
             WHERE status = 'pending'
             ORDER BY created_at ASC
@@ -166,11 +166,10 @@ def get_pending_packages(limit):
         cursor.close()
         conn.close()
 
-        package_names = [pkg['package_name'] for pkg in packages]
-        print(f"Found {len(package_names)} pending package(s) to process")
+        print(f"Found {len(packages)} pending package(s) to process")
         print()
 
-        return package_names
+        return packages
 
     except Exception as e:
         print(f"Error fetching packages from database: {str(e)}")
@@ -181,18 +180,30 @@ def get_pending_packages(limit):
 
 
 
-def create_scanner_job_graphql(package_name):
+def create_scanner_job_graphql(package):
     """
     Create a scanner job using Hyperplane GraphQL API
     This makes jobs appear in Hyperplane UI
+
+    Args:
+        package: Dict with keys: package_name, version, python_version
     """
     try:
-        print(f"Creating job via GraphQL for package: {package_name}")
+        # Extract package info
+        package_name = package['package_name']
+        version = package.get('version') or 'latest'
+        python_version = package.get('python_version') or '3.11'  # Default to 3.11
+
+        # Construct full package spec: packagename==version
+        package_spec = f"{package_name}=={version}" if version != 'latest' else package_name
+
+        print(f"Creating job via GraphQL for package: {package_spec} (Python {python_version})")
 
         # Generate unique job name
         timestamp = int(datetime.utcnow().timestamp())
-        safe_name = package_name.split('==')[0].lower().replace('_', '-').replace('.', '-')
-        job_name = f"pythonPakcageScanner-{safe_name}-{timestamp}"
+        safe_name = package_name.lower().replace('_', '-').replace('.', '-')
+        safe_version = version.replace('.', '-')
+        job_name = f"pythonPakcageScanner-{safe_name}-{safe_version}-py{python_version.replace('.', '')}-{timestamp}"
 
         # Build pod spec matching working configuration
         pod_spec = {
@@ -295,12 +306,12 @@ def create_scanner_job_graphql(package_name):
                         "/tmp/git/monorepo/scan_package.py"
                     ],
                     "env": [
-                        {"name": "PACKAGE_NAME", "value": package_name},
+                        {"name": "PACKAGE_NAME", "value": package_spec},
+                        {"name": "PYTHON_VERSION", "value": python_version},
                         {"name": "DATABASE_URL", "value": DATABASE_URL},
                         {"name": "PYPI_SERVER_URL", "value": os.getenv("PYPI_SERVER_URL", "http://pypiserver-pypiserver.hyperplane-pypiserver.svc.cluster.local:8080")},
                         {"name": "PYPI_USERNAME", "value": os.getenv("PYPI_USERNAME", "username")},
                         {"name": "PYPI_PASSWORD", "value": os.getenv("PYPI_PASSWORD", "password")},
-                        {"name": "PYTHON_VERSIONS", "value": os.getenv("PYTHON_VERSIONS", "3.9 3.10 3.11 3.12")},
                         {"name": "MY_POD_NAME", "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}},
                         {"name": "MY_POD_NAMESPACE", "valueFrom": {"fieldRef": {"fieldPath": "metadata.namespace"}}},
                         {"name": "MY_NODE_IP", "valueFrom": {"fieldRef": {"fieldPath": "status.podIP"}}},
@@ -452,8 +463,8 @@ def main():
     print()
 
     # 3. Fetch pending packages
-    # pending_packages = get_pending_packages(available_slots)
-    pending_packages = ["pandas==3.0.0"]
+    pending_packages = get_pending_packages(available_slots)
+   
     if not pending_packages:
         print("No pending packages found in database.")
         return
@@ -463,9 +474,9 @@ def main():
     print()
 
     created_count = 0
-    for package_name in pending_packages:
+    for package in pending_packages:
         # Use GraphQL API (appears in Hyperplane UI)
-        success = create_scanner_job_graphql(package_name)
+        success = create_scanner_job_graphql(package)
 
         if success:
             created_count += 1

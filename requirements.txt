@@ -5,3 +5,4 @@ psycopg2-binary==2.9.9
 twine==4.0.2
 SQLAlchemy==2.0.23
 python-dotenv==1.0.0
+beautifulsoup4==4.12.2

@@ -3,6 +3,7 @@ Package controller for handling HTTP requests
 """
 
 import logging
+from typing import Optional
 from flask import Response, jsonify
 from services.package_service import PackageService
 from repositories.package_repository import PackageRepository
@@ -30,14 +31,24 @@ class PackageController:
         package_service = PackageService(package_repo)
         return PackageController(package_service)
 
-    def get_package(self, package_name: str) -> Response:
+    def get_package(
+        self,
+        package_name: str,
+        version: Optional[str] = None,
+        python_version: Optional[str] = None
+    ) -> Response:
         """
         Get package - checks PyPI server first, then database.
+
+        Args:
+            package_name: Name of the package
+            version: Version of the package (optional)
+            python_version: Python version from pip User-Agent (optional)
 
         Returns:
             200 - Package available on PyPI (pass-through)
             403 - Package is vulnerable
-            503 - Package is pending scan
+            503 - Package is pending scan or being scanned
         """
         try:
             # Check PyPI server first
@@ -47,21 +58,26 @@ class PackageController:
                 return Response(content, status=200, headers=headers)
 
             # Not on PyPI - check database for status
-            status, vuln_info = self.package_service.check_package_status(package_name)
+            status, vuln_info = self.package_service.check_package_status(package_name, version)
 
-            #TODO: Move status to an enum
-            if status == 'safe':
-                # Safe but pending scan
-                return self._respond_pending(package_name)
+            # Use enum values
+            from models.package import PackageStatus
 
-            elif status == 'vulnerable':
+            if status == PackageStatus.COMPLETED.value:
+                # Package scanned and uploaded to internal PyPI
+                return Response(content, status=200, headers=headers)
+
+            elif status == PackageStatus.VULNERABLE.value:
                 return self._respond_vulnerable(package_name, vuln_info)
 
-            elif status == 'pending':
+            elif status in [PackageStatus.PENDING.value, PackageStatus.DOWNLOADED.value]:
                 return self._respond_pending(package_name)
 
-            else:  # unknown
-                self.package_service.add_package_for_scanning(package_name)
+            else:  # unknown or error states
+                # Add package for scanning with version info
+                self.package_service.add_package_for_scanning(
+                    package_name, version, python_version
+                )
                 return self._respond_pending(package_name)
 
         except Exception as e:
@@ -114,3 +130,71 @@ class PackageController:
         return jsonify(problem_details), 500, {
             'Content-Type': 'application/problem+json'
         }
+
+    # -----------------------
+    # API endpoints for package information
+    # -----------------------
+
+    def list_all_packages(self) -> Response:
+        """List all packages in database"""
+        try:
+            packages = self.package_service.get_all_packages()
+            return jsonify({
+                "total": len(packages),
+                "packages": packages
+            }), 200
+        except Exception as e:
+            logger.error(f"Error listing packages: {e}", exc_info=True)
+            return jsonify({
+                "error": "Failed to fetch packages",
+                "details": str(e)
+            }), 500
+
+    def list_pending_packages(self) -> Response:
+        """List pending packages"""
+        try:
+            packages = self.package_service.get_pending_packages_detailed()
+            return jsonify({
+                "total": len(packages),
+                "packages": packages
+            }), 200
+        except Exception as e:
+            logger.error(f"Error listing pending packages: {e}", exc_info=True)
+            return jsonify({
+                "error": "Failed to fetch pending packages",
+                "details": str(e)
+            }), 500
+
+    def get_package_stats(self) -> Response:
+        """Get package statistics"""
+        try:
+            stats = self.package_service.get_package_stats()
+            return jsonify(stats), 200
+        except Exception as e:
+            logger.error(f"Error getting package stats: {e}", exc_info=True)
+            return jsonify({
+                "error": "Failed to fetch statistics",
+                "details": str(e)
+            }), 500
+
+    def list_pypi_packages(self) -> Response:
+        """List packages from PyPI server"""
+        try:
+            success, packages, error = self.package_service.get_pypi_packages()
+
+            if not success:
+                return jsonify({
+                    "error": "Failed to fetch PyPI packages",
+                    "details": error
+                }), 502
+
+            return jsonify({
+                "total": len(packages),
+                "packages": packages
+            }), 200
+        except Exception as e:
+            logger.error(f"Error listing PyPI packages: {e}", exc_info=True)
+            return jsonify({
+                "error": "Internal server error",
+                "details": str(e)
+            }), 500
