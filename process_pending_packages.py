@@ -19,23 +19,11 @@ DATABASE_URL = "postgresql://postgres:Y2dtcJhdFW@supabase-postgresql.hyperplane-
 
 # Scanner Docker image
 SCANNER_IMAGE = os.getenv("SCANNER_IMAGE", "gcr.io/devsentient-infra/custom/hnb/custom/pypiscanningjob:latestv3")
-
-# Keycloak Authentication (DISABLED - Running without auth)
-# REALM = os.getenv("HYPERPLANE_REALM", "Hyperplane")
-# CLIENT_ID = os.getenv("HYPERPLANE_CLIENT_ID", "istio")
-# HYPERPLANE_DOMAIN = os.getenv("HYPERPLANE_DOMAIN", "")
-# HYPERPLANE_USERNAME = os.getenv("HYPERPLANE_USERNAME", "")
-# HYPERPLANE_PASSWORD = os.getenv("HYPERPLANE_PASSWORD", "")
-# HYPERPLANE_REFRESH_TOKEN = os.getenv("HYPERPLANE_REFRESH_TOKEN", None)
 HYPERPLANE_GRAPHQL_URL = os.getenv("HYPERPLANE_GRAPHQL_URL", "http://api-server.hyperplane-core.svc.cluster.local/graphql")
 HYPERPLANE_USER_ID = os.getenv("HYPERPLANE_USER_ID", "3630abbd-289b-4d78-85d0-fcf7bcb3cc81")
 HYPERPLANE_USER_EMAIL = os.getenv("HYPERPLANE_USER_EMAIL", "shakudo-admin@shakudo.io")
 HYPERPLANE_VC_SERVER_ID = os.getenv("HYPERPLANE_VC_SERVER_ID", "c4be4cb1-9623-4d00-abcb-b472e9a4f192")
 
-# Kubernetes API configuration (REMOVED - now using GraphQL API)
-# K8S_API_HOST = "https://kubernetes.default.svc:443"
-# K8S_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-# K8S_CA_CERT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
 print(f"GraphQL API URL: {HYPERPLANE_GRAPHQL_URL}")
 print(f"Database URL: {DATABASE_URL.split('@')[0].split(':')[0]}:***@{DATABASE_URL.split('@')[1]}")
@@ -47,99 +35,94 @@ print("=" * 60)
 print(f"Started at: {datetime.utcnow().isoformat()}")
 print()
 
+def count_jobs_advanced(
+    prefix=None,
+    status=None,
+    job_type=None,
+    immediate_only=False,
+    exclude_statuses=None
+):
+    """
+    Advanced job counting with multiple filters
 
-def get_running_jobs_count():
-    """Get count of currently running scanner jobs using GraphQL API"""
-    try:
-        print(f"Step 1: Checking running jobs via GraphQL...")
+    Args:
+        prefix: Job name prefix
+        status: Filter by status (pending, in progress, done, etc.)
+        job_type: Filter by job type (basic, pythonimage, etc.)
+        immediate_only: Only count immediate jobs
+        exclude_statuses: List of statuses to exclude
+    """
 
-        # Build GraphQL query to count jobs
-        # Only count immediate jobs that are not completed
-        where_conditions = {
-            "AND": [
-                {
-                    "jobName": {
-                        "startsWith": "scanner-",
-                        "mode": "insensitive"
-                    }
-                },
-                {
-                    "schedule": {
-                        "equals": "immediate"
-                    }
-                },
-                {
-                    "status": {
-                        "notIn": ["done", "failed", "cancelled"]
-                    }
-                }
-            ]
-        }
+    where_conditions = {"AND": []}
 
-        query = """
-        query countJobs($whereClause: PipelineJobWhereInput!) {
-            countJobs(whereOveride: $whereClause)
-        }
-        """
+    # Add prefix filter
+    if prefix:
+        where_conditions["AND"].append({
+            "jobName": {
+                "startsWith": prefix,
+                "mode": "insensitive"
+            }
+        })
 
-        variables = {
-            "whereClause": where_conditions
-        }
+    # Add status filter
+    if status:
+        where_conditions["AND"].append({
+            "status": {"equals": status}
+        })
 
-        payload = {
+    # Exclude certain statuses
+    if exclude_statuses:
+        where_conditions["AND"].append({
+            "status": {"notIn": exclude_statuses}
+        })
+
+    # Add job type filter
+    if job_type:
+        where_conditions["AND"].append({
+            "jobType": {"equals": job_type}
+        })
+
+    # Add immediate filter
+    if immediate_only:
+        where_conditions["AND"].append({
+            "schedule": {"equals": "immediate"}
+        })
+
+    query = """
+    query countJobs($whereClause: PipelineJobWhereInput!) {
+        countJobs(whereOveride: $whereClause)
+    }
+    """
+
+    variables = {
+        "whereClause": where_conditions
+    }
+
+    response = requests.post(
+        HYPERPLANE_GRAPHQL_URL,
+        json={
             "operationName": "countJobs",
             "query": query,
             "variables": variables
         }
+    )
 
-        headers = {
-            "Content-Type": "application/json"
-        }
+    if response.status_code == 200:
+        try:
+            result = response.json()
+            if "errors" in result:
+                print("GraphQL Errors:")
+                print(json.dumps(result["errors"], indent=2))
+                return None
 
-        # Retry logic for Istio sidecar initialization
-        import time
-        max_retries = 3
-        retry_delay = 2
-
-        response = None
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(
-                    HYPERPLANE_GRAPHQL_URL,
-                    headers=headers,
-                    json=payload,
-                    timeout=10
-                )
-                response.raise_for_status()
-                break
-            except requests.exceptions.ConnectionError as e:
-                if attempt < max_retries - 1:
-                    print(f"Connection attempt {attempt + 1} failed, retrying in {retry_delay}s...")
-                    time.sleep(retry_delay)
-                else:
-                    raise
-
-        if not response:
-            raise Exception("Failed to connect to GraphQL API after retries")
-
-        result = response.json()
-
-        if "errors" in result:
-            print(f"GraphQL errors: {result['errors']}")
-            return 0
-
-        running_count = result.get("data", {}).get("countJobs", 0)
-        print(f"Current running jobs: {running_count}")
-        print()
-
-        return running_count
-
-    except Exception as e:
-        print(f"Error checking jobs: {str(e)}")
-        print(f"Defaulting to 0 running jobs")
-        import traceback
-        traceback.print_exc()
-        return 0
+            count = result.get("data", {}).get("countJobs")
+            return count
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+    else:
+        print(f"Error: {response.status_code}")
+        return None
 
 
 def get_pending_packages(limit):
@@ -196,47 +179,6 @@ def get_pending_packages(limit):
         return []
 
 
-# Authentication disabled - running without Keycloak token
-# def get_shakudo_token():
-#     """
-#     Generate JWT token via Keycloak/OpenID Connect
-#     If refresh token is provided, use it to obtain a new access token
-#     """
-#     if not HYPERPLANE_DOMAIN:
-#         print("  ⚠️  HYPERPLANE_DOMAIN not set, cannot authenticate")
-#         return None, None
-#
-#     if not HYPERPLANE_USERNAME and not HYPERPLANE_REFRESH_TOKEN:
-#         print("  ⚠️  Either USERNAME/PASSWORD or REFRESH_TOKEN required")
-#         return None, None
-#
-#     token_endpoint = f"https://{HYPERPLANE_DOMAIN}/auth/realms/{REALM}/protocol/openid-connect/token"
-#     headers = {"Content-Type": "application/x-www-form-urlencoded"}
-#
-#     if HYPERPLANE_REFRESH_TOKEN:
-#         data = {
-#             "grant_type": "refresh_token",
-#             "refresh_token": HYPERPLANE_REFRESH_TOKEN,
-#             "client_id": CLIENT_ID
-#         }
-#     else:
-#         data = {
-#             "grant_type": "password",
-#             "username": HYPERPLANE_USERNAME,
-#             "password": HYPERPLANE_PASSWORD,
-#             "client_id": CLIENT_ID
-#         }
-#
-#     try:
-#         response = requests.post(token_endpoint, data=data, headers=headers, timeout=10)
-#         response.raise_for_status()
-#         res = response.json()
-#         access_token = res['access_token']
-#         new_refresh_token = res.get('refresh_token', HYPERPLANE_REFRESH_TOKEN)
-#         return access_token, new_refresh_token
-#     except requests.exceptions.RequestException as err:
-#         print(f"  ✗ Failed to get token: {err}")
-#         return None, None
 
 
 def create_scanner_job_graphql(package_name):
@@ -479,7 +421,25 @@ def main():
     """Main execution function"""
 
     # 1. Check running jobs (with Istio retry logic)
-    running_jobs = get_running_jobs_count()
+    prefix = "scanner"
+    status = "in progress"
+
+    print(f"\n🔢 Advanced Count:")
+    print(f"   Prefix: {prefix}")
+    if status:
+        print(f"   Status: {status}")
+
+    running_jobs = count_jobs_advanced(
+        prefix=prefix,
+        status=status,
+        job_type="basic",
+        immediate_only=True
+    )
+
+    if running_jobs is not None:
+        print(f"\n   Result: {running_jobs} jobs")
+
+
 
     # 2. Calculate available slots
     available_slots = MAX_CONCURRENT_JOBS - running_jobs
