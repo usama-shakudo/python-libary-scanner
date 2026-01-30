@@ -192,7 +192,7 @@ def create_scanner_job_graphql(package_name):
         # Generate unique job name
         timestamp = int(datetime.utcnow().timestamp())
         safe_name = package_name.split('==')[0].lower().replace('_', '-').replace('.', '-')
-        job_name = f"scanner-{safe_name}-{timestamp}"
+        job_name = f"pythonPakcageScanner-{safe_name}-{timestamp}"
 
         # Build pod spec matching working configuration
         pod_spec = {
@@ -432,7 +432,7 @@ def main():
     running_jobs = count_jobs_advanced(
         prefix=prefix,
         status=status,
-        job_type="basic",
+        job_type="",
         immediate_only=True
     )
 
