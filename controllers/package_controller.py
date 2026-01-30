@@ -51,37 +51,48 @@ class PackageController:
             503 - Package is pending scan or being scanned
         """
         try:
+            logger.info(f"📦 Request: package={package_name}, version={version}, python={python_version}")
+
             # Check PyPI server first
+            logger.info(f"🔍 Step 1: Checking internal PyPI for '{package_name}'")
             available, content, headers = self.package_service.check_pypi_availability(package_name)
 
             if available:
+                logger.info(f"✅ Package '{package_name}' found on internal PyPI → Returning 200")
                 return Response(content, status=200, headers=headers)
 
             # Not on PyPI - check database for status
+            logger.info(f"🔍 Step 2: Not on internal PyPI, checking database")
             status, vuln_info = self.package_service.check_package_status(package_name, version)
+            logger.info(f"📊 Database status: '{status}'")
 
             # Use enum values
             from models.package import PackageStatus
 
             if status == PackageStatus.COMPLETED.value:
                 # Package scanned and uploaded to internal PyPI
+                logger.info(f"✅ Status COMPLETED → Returning 200")
                 return Response(content, status=200, headers=headers)
 
             elif status == PackageStatus.VULNERABLE.value:
+                logger.warning(f"⛔ Status VULNERABLE → Returning 403")
                 return self._respond_vulnerable(package_name, vuln_info)
 
             elif status in [PackageStatus.PENDING.value, PackageStatus.DOWNLOADED.value]:
+                logger.info(f"⏳ Status {status.upper()} → Returning 503")
                 return self._respond_pending(package_name)
 
             else:  # unknown or error states
                 # Add package for scanning with version info
+                logger.info(f"➕ Status '{status}', adding for scanning")
                 self.package_service.add_package_for_scanning(
                     package_name, version, python_version
                 )
+                logger.info(f"⏳ Returning 503 (scan pending)")
                 return self._respond_pending(package_name)
 
         except Exception as e:
-            logger.error(f"Error processing request for '{package_name}': {e}", exc_info=True)
+            logger.error(f"❌ Error processing request for '{package_name}': {e}", exc_info=True)
             return self._respond_error()
 
     # -----------------------

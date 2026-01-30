@@ -33,15 +33,26 @@ class PackageService:
         """
         try:
             pypi_url = f"{Config.PYPI_SERVER_URL}/simple/{package_name}/"
+            logger.info(f"🔍 Checking internal PyPI: {pypi_url}")
+
             response = requests.get(pypi_url, timeout=10)
 
+            logger.info(f"📥 PyPI Response - Status: {response.status_code}")
+            logger.info(f"📥 PyPI Response - Content-Type: {response.headers.get('Content-Type', 'N/A')}")
+            logger.info(f"📥 PyPI Response - Content-Length: {len(response.content)} bytes")
+
             if response.status_code == 200:
+                # Log first 500 chars of HTML content for debugging
+                content_preview = response.text[:500] if len(response.text) > 500 else response.text
+                logger.debug(f"📄 PyPI Response - Content preview:\n{content_preview}")
+                logger.info(f"✅ Package '{package_name}' found on internal PyPI")
                 return (True, response.content, dict(response.headers))
 
+            logger.info(f"❌ Package '{package_name}' not found on internal PyPI (status: {response.status_code})")
             return (False, None, None)
 
         except requests.RequestException as e:
-            logger.warning(f"PyPI server check failed: {e}")
+            logger.warning(f"⚠️  PyPI server check failed for '{package_name}': {e}")
             return (False, None, None)
 
     def check_package_status(
