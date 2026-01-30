@@ -37,7 +37,7 @@ class PackageService:
 
             response = requests.get(pypi_url, timeout=10)
 
-            logger.info(f"📥 PyPI Response - Status: {response.status_code}")
+            logger.info(f"📥 PyPI Response - Status: {response}")
             logger.info(f"📥 PyPI Response - Content-Type: {response.headers.get('Content-Type', 'N/A')}")
             logger.info(f"📥 PyPI Response - Content-Length: {len(response.content)} bytes")
 
